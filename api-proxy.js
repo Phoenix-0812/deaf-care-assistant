@@ -1,9 +1,15 @@
-/* 前端状态代理：拦截 /api/* 请求，用 localStorage 模拟后端
-   用于 GitHub Pages 纯静态部署，护士端和手表端各自独立运行 */
+/* 云端状态代理（PieSocket 公共 WebSocket 实时同步，免注册、标准 443 端口）
+   护士端与手表端连接同一个频道，任一设备执行动作后全量状态广播，
+   对端 1 秒内收到并刷新；断线自动重连，心跳 5 秒保证丢消息自愈。
+   断网/WS 不可用时用 localStorage 缓存兜底单机演示。 */
 (function(){
   'use strict';
-  var KEY = 'dca_state_v5';
-  var APP_VER = '5.0';
+  var CHANNEL  = 'dca-demo-7qkx29';
+  var WS_URL   = 'wss://demo.piesocket.com/v3/' + CHANNEL +
+                 '?api_key=oCdCMcMPQpbvNjDLFKtu2LRX0r3HDhms7j1aU7w2&notify_self=0';
+  var CACHE_KEY = 'dca_cache_v7';
+  var APP_VER   = '5.0';
+  var HEARTBEAT_MS = 5000;
 
   /* ---------- 工具 ---------- */
   function hm(offsetMin){
@@ -28,7 +34,7 @@
     ['马**','女',25,'耳鼻喉科','3 诊室','A002','识字困难']
   ];
 
-  function makeSeed(){
+  function makeSeed(rev){
     var patients = SEED.map(function(s,i){
       return {
         id:i+1,name:s[0],gender:s[1],age:s[2],dept:s[3],room:s[4],no:s[5],need:s[6],
@@ -40,30 +46,139 @@
       };
     });
     return {
-      rev:1,patients:patients,
+      rev:rev||1,patients:patients,
       feed:[{t:hm(6),label:'今日已挂号 '+patients.length+' 人，等待发放手环',color:'#1F6FE0'}],
       sos:[]
     };
   }
 
-  /* ---------- 状态持久化 ---------- */
-  var state = null;
-  try{
-    var raw = localStorage.getItem(KEY);
-    if(raw) state = JSON.parse(raw);
-    if(!state || !Array.isArray(state.patients) || !state.patients.length){
-      state = makeSeed();
-      localStorage.setItem(KEY, JSON.stringify(state));
-    }
-  }catch(e){ state = makeSeed(); localStorage.setItem(KEY, JSON.stringify(state)); }
-
-  function save(){
-    try{ localStorage.setItem(KEY, JSON.stringify(state)); }catch(e){}
+  /* ---------- 本地缓存（断网兜底） ---------- */
+  function cacheLoad(){
+    try{
+      var raw = localStorage.getItem(CACHE_KEY);
+      if(raw){
+        var s = JSON.parse(raw);
+        if(s && Array.isArray(s.patients) && s.patients.length) return s;
+      }
+    }catch(e){}
+    return null;
   }
-  function bump(){ state.rev++; save(); }
+  function cacheSave(s){
+    try{ localStorage.setItem(CACHE_KEY, JSON.stringify(s)); }catch(e){}
+  }
+
+  var state = cacheLoad() || makeSeed();
+
+  /* ---------- WebSocket 实时同步 ---------- */
+  var ws = null, connected = false, everSynced = false;
+  var reconnectDelay = 1000, reconnectTimer = null, heartbeatTimer = null;
+  var readyResolve, readyResolved = false;
+  var ready = new Promise(function(res){ readyResolve = res; });
+
+  function online(){ return connected; }
+  window.__DCA_online = online;
+
+  /* 状态变化后通知页面立即刷新（页面也保留轮询兜底） */
+  function notifyUI(){
+    try{ window.dispatchEvent(new CustomEvent('dca-state')); }catch(e){}
+  }
+
+  function applyRemote(remote){
+    if(!remote || !Array.isArray(remote.patients) || !remote.patients.length) return false;
+    if(Number(remote.rev||0) < Number(state.rev||0)) return false;
+    var first = !everSynced;
+    state = remote;
+    everSynced = true;
+    cacheSave(state);
+    notifyUI();
+    if(first && !readyResolved){ readyResolved = true; readyResolve(); }
+    return true;
+  }
+
+  function send(obj){
+    if(ws && ws.readyState === 1){
+      try{ ws.send(JSON.stringify(obj)); return true; }catch(e){}
+    }
+    return false;
+  }
+  function broadcast(){
+    send({k:'state', rev:Number(state.rev||0), state:state});
+  }
+
+  function connect(){
+    var wsForThis = null;
+    try{
+      wsForThis = new WebSocket(WS_URL);
+    }catch(e){
+      scheduleReconnect();
+      return;
+    }
+    ws = wsForThis;
+
+    wsForThis.onopen = function(){
+      if(ws !== wsForThis) return;
+      connected = true; reconnectDelay = 1000;
+      /* 上线：向频道内其他设备索要当前全量状态 */
+      send({k:'hello'});
+      if(heartbeatTimer) clearInterval(heartbeatTimer);
+      heartbeatTimer = setInterval(broadcast, HEARTBEAT_MS);
+      /* 2 秒内没有任何对端回发状态：以本地为准（首次即播种），放行页面 */
+      setTimeout(function(){
+        if(!everSynced){
+          everSynced = true;
+          cacheSave(state);
+          broadcast();
+          if(!readyResolved){ readyResolved = true; readyResolve(); }
+        }
+      }, 2000);
+    };
+
+    wsForThis.onmessage = function(ev){
+      if(ws !== wsForThis) return;
+      var msg;
+      try{ msg = JSON.parse(ev.data); }catch(e){ return; }
+      if(msg.k === 'hello'){
+        /* 新设备上线：把我手里的最新状态发给它 */
+        broadcast();
+      }else if(msg.k === 'state'){
+        applyRemote(msg.state);
+      }
+    };
+
+    function down(){
+      if(ws !== wsForThis) return;
+      connected = false;
+      if(heartbeatTimer){ clearInterval(heartbeatTimer); heartbeatTimer = null; }
+      scheduleReconnect();
+    }
+    wsForThis.onclose = down;
+    wsForThis.onerror = function(){ try{ wsForThis.close(); }catch(e){} };
+  }
+
+  function scheduleReconnect(){
+    if(reconnectTimer) return;
+    reconnectTimer = setTimeout(function(){
+      reconnectTimer = null;
+      reconnectDelay = Math.min(reconnectDelay * 2, 10000);
+      connect();
+    }, reconnectDelay);
+  }
+
+  if('WebSocket' in window){
+    connect();
+  }else{
+    readyResolved = true; readyResolve();
+  }
+  /* 兜底：无论如何 3 秒后放行页面（WS 完全不可用时单机演示） */
+  setTimeout(function(){
+    if(!readyResolved){ readyResolved = true; readyResolve(); }
+  }, 3000);
+
+  /* ---------- 业务动作 ---------- */
+  function bump(){ state.rev = (Number(state.rev)||0) + 1; cacheSave(state); }
   function feedAdd(label,color){
     state.feed.unshift({t:hm(0),label:label,color:color||'#1F6FE0'});
-    if(state.feed.length>60) state.feed.length=60;
+    if(state.feed.length>40) state.feed.length=40;
   }
   function activePatientByBand(band){
     return state.patients.find(function(p){ return p.bandActive && p.band===band; }) || null;
@@ -83,48 +198,51 @@
     };
   }
 
-  /* ---------- 业务动作 ---------- */
   function handleAction(body){
     var t = body.type;
+    if(t === '__reset'){
+      state = makeSeed(Date.now()); cacheSave(state);
+      broadcast(); notifyUI();
+      return {code:0};
+    }
     var p = body.patientId ? state.patients.find(function(x){ return x.id===Number(body.patientId); }) : null;
     switch(t){
       case 'bind':{
         var band = String(body.band||'').toUpperCase();
         if(!p) return {code:400,msg:'请先选择患者'};
-        if(!band) return {code:400,msg:'缺少手环编号'};
+        if(!band) return {code:400,msg:'缺少手表编号'};
         var used = activePatientByBand(band);
-        if(used && used.id!==p.id) return {code:409,msg:'手环 '+band+' 正在给 '+used.name+' 使用'};
-        if(p.bandActive) return {code:409,msg:p.name+' 已绑定手环 '+p.band};
+        if(used && used.id!==p.id) return {code:409,msg:'手表 '+band+' 正在给 '+used.name+' 使用'};
+        if(p.bandActive) return {code:409,msg:p.name+' 已绑定手表 '+p.band};
         p.band = band; p.bandActive = true; p.status = '候诊中'; p.callToken = null;
-        p.events.push({t:hm(0),label:'护士扫码绑定手环 '+band});
-        feedAdd(p.no+' '+p.name+' 领取手环 '+band+' · '+p.dept,'#1F6FE0');
-        bump();
-        return {code:0,patient:p,session:sessionFor(band)};
+        p.events.push({t:hm(0),label:'护士扫码绑定手表 '+band});
+        feedAdd(p.no+' '+p.name+' 领取手表 '+band+' · '+p.dept,'#1F6FE0');
+        break;
       }
       case 'call':{
         if(!p) return {code:404,msg:'患者不存在'};
-        if(!p.bandActive) return {code:400,msg:'该患者尚未领取手环'};
+        if(!p.bandActive) return {code:400,msg:'该患者尚未领取手表'};
         if(p.status==='已完成') return {code:400,msg:'该患者已完成就诊'};
         p.status='已叫号'; p.callToken=Date.now();
         p.events.push({t:hm(0),label:'叫号 · '+p.room});
         feedAdd(p.no+' '+p.name+' 已叫号 · '+p.room,'#E8961F');
-        bump(); return {code:0};
+        break;
       }
       case 'ack':{
         var bandAck = String(body.band||'').toUpperCase();
         var a = activePatientByBand(bandAck);
-        if(!a) return {code:404,msg:'手环未绑定'};
+        if(!a) return {code:404,msg:'手表未绑定'};
         a.callToken=null; if(a.status==='已叫号') a.status='就诊中';
-        a.events.push({t:hm(0),label:'患者手环确认，前往 '+a.room});
-        feedAdd(a.name+' 手环确认收到叫号','#0FA3A0');
-        bump(); return {code:0};
+        a.events.push({t:hm(0),label:'患者手表确认，前往 '+a.room});
+        feedAdd(a.name+' 手表确认收到叫号','#0FA3A0');
+        break;
       }
       case 'visit':{
         if(!p) return {code:404};
         p.callToken=null; p.status='就诊中';
         p.events.push({t:hm(0),label:'进入诊室就诊'});
         feedAdd(p.name+' 进入 '+p.room+' 就诊','#0FA3A0');
-        bump(); return {code:0};
+        break;
       }
       case 'exam':{
         if(!p) return {code:404};
@@ -132,26 +250,26 @@
         p.examToken=Date.now(); p.status='检查中';
         p.events.push({t:hm(0),label:'推送 '+body.examName+' 引导'});
         feedAdd(p.name+' 开始 '+body.examName+' 引导','#6E56D8');
-        bump(); return {code:0};
+        break;
       }
       case 'examNext':{
         if(!p || !p.examSteps) return {code:404};
-        if(p.examStep < p.examSteps.length-1){ p.examStep++; bump(); }
-        return {code:0,step:p.examStep};
+        if(p.examStep < p.examSteps.length-1){ p.examStep++; }
+        break;
       }
       case 'examDone':{
         if(!p) return {code:404};
         p.status='就诊中'; p.examToken=null; p.examName=null; p.examSteps=null; p.examStep=0;
         p.events.push({t:hm(0),label:'检查完成，返回诊室'});
         feedAdd(p.name+' 检查完成，返回诊室','#0FA3A0');
-        bump(); return {code:0};
+        break;
       }
       case 'med':{
         if(!p) return {code:404};
         p.medWin=body.win; p.medMeds=body.meds||[]; p.medToken=Date.now();
         p.events.push({t:hm(0),label:'推送取药提醒 · '+body.win});
         feedAdd(p.name+' 收到取药提醒 · '+body.win,'#0FA3A0');
-        bump(); return {code:0};
+        break;
       }
       case 'medAck':{
         var bandMed = String(body.band||'').toUpperCase();
@@ -160,16 +278,16 @@
         m.medToken=null;
         m.events.push({t:hm(0),label:'患者已确认取到药'});
         feedAdd(m.name+' 已确认取药','#0FA3A0');
-        bump(); return {code:0};
+        break;
       }
       case 'finish': case 'unbind':{
         if(!p) return {code:404};
         var fb = p.band;
         p.status='已完成'; p.bandActive=false;
         p.callToken=null; p.examToken=null; p.medToken=null;
-        p.events.push({t:hm(0),label:t==='finish'?'全部就诊完成 · 手环回收':'手环解绑回收'});
-        feedAdd(p.name+' '+(t==='finish'?'全部就诊完成':'手环已解绑')+' · '+fb+' 已回收','#5A7C93');
-        bump(); return {code:0};
+        p.events.push({t:hm(0),label:t==='finish'?'全部就诊完成 · 手表回收':'手表解绑回收'});
+        feedAdd(p.name+' '+(t==='finish'?'全部就诊完成':'手表已解绑')+' · '+fb+' 已回收','#5A7C93');
+        break;
       }
       case 'sos':{
         var bandSos = String(body.band||'').toUpperCase();
@@ -180,20 +298,21 @@
         state.sos.unshift(item);
         feedAdd((item.kind==='interpreter'?'手语翻译请求':'患者求助')+' · '+bandSos+' '+item.loc,
           item.kind==='interpreter'?'#6E56D8':'#F4574C');
-        bump(); return {code:0};
+        break;
       }
       case 'sosHandle': case 'sosResolve':{
         var ss = state.sos.find(function(x){ return x.id===Number(body.id); });
         if(!ss) return {code:404};
         ss.status = t==='sosHandle'?'handling':'resolved';
         ss.time = hm(0) + (t==='sosHandle'?' 处理中':' 已解决');
-        bump(); return {code:0};
-      }
-      case '__reset':{
-        state = makeSeed(); save(); return {code:0};
+        break;
       }
       default: return {code:400,msg:'未知操作'};
     }
+    bump();
+    broadcast();
+    notifyUI();
+    return {code:0};
   }
 
   /* ---------- 拦截 fetch ---------- */
@@ -212,33 +331,42 @@
     var path = typeof url==='string' ? url : (url&&url.url) || '';
     if(path.indexOf('/api/')===0){
       if(path==='/api/health'){
-        return Promise.resolve(fakeResponse({ok:true,rev:state.rev}));
+        return Promise.resolve(fakeResponse({ok:true,rev:state.rev,online:connected}));
       }
       if(path==='/api/nurse'){
-        return Promise.resolve(fakeResponse({ver:APP_VER,rev:state.rev,
-          patients:state.patients,feed:state.feed,sos:state.sos,time:hm(0)}));
+        return ready.then(function(){
+          return fakeResponse({ver:APP_VER,rev:state.rev,
+            patients:state.patients,feed:state.feed,sos:state.sos,time:hm(0)});
+        });
       }
       if(path.indexOf('/api/band/')===0){
         var band = path.slice('/api/band/'.length).toUpperCase();
-        var s = sessionFor(band); s.ver = APP_VER;
-        return Promise.resolve(fakeResponse(s));
+        return ready.then(function(){
+          var s = sessionFor(band); s.ver = APP_VER;
+          return fakeResponse(s);
+        });
       }
       if(path==='/api/action'){
         var body = {};
         try{ body = init&&init.body ? JSON.parse(init.body) : {}; }catch(e){}
-        try{
+        return ready.then(function(){
           var r = handleAction(body);
           var code = r.code===0 || !r.code ? 200 : (r.code===409 ? 409 : r.code);
           var obj = r.code===0 || !r.code ? r : {code:r.code,msg:r.msg};
-          return Promise.resolve(fakeResponse(obj,code));
-        }catch(e){
-          return Promise.resolve(fakeResponse({code:500,msg:String(e.message||e)},500));
-        }
+          return fakeResponse(obj,code);
+        }).catch(function(e){
+          return fakeResponse({code:500,msg:String(e.message||e)},500);
+        });
       }
     }
     return realFetch.apply(this, arguments);
   };
 
-  /* 暴露重置接口（用于开发调试） */
-  window.__DCA_reset = function(){ handleAction({type:'__reset'}); };
+  /* 重置演示（护士端/手表端设置页调用） */
+  window.__DCA_reset = function(){
+    return ready.then(function(){
+      state = makeSeed(Date.now()); cacheSave(state);
+      broadcast(); notifyUI();
+    });
+  };
 })();

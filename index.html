@@ -872,7 +872,8 @@ async function startCamera(){
     showScanErr('当前浏览器无法调用相机，请改用「拍照片识别」，或输入手环表带编号完成绑定。');return;}
   try{
     $('#scanBtn').disabled=true;$('#scanBtn').textContent='正在启动…';
-    camStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment',width:{ideal:720},height:{ideal:720}}});
+    camStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1280,min:640},height:{ideal:720,min:480},
+      advanced:[{focusMode:'continuous'}]}});
     const video=$('#scanVideo');video.srcObject=camStream;await video.play();
     const ph=$('#scanPlaceholder');if(ph)ph.style.display='none';
     const sf=$('#scanFrame');if(sf)sf.classList.add('scanning');
@@ -1116,6 +1117,8 @@ applyNurse();
 if(!nurse.name)$('#loginOverlay').classList.add('show');
 pull();
 setInterval(pull,2000);
+var _pullT=null;
+addEventListener('dca-state',function(){clearTimeout(_pullT);_pullT=setTimeout(pull,150);});
 
 </script>
 </body>

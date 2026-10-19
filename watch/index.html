@@ -458,6 +458,7 @@
   </div>
 </div>
 
+<script src="../api-proxy.js"></script>
 <script>
 /* ================= 基础 ================= */
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
@@ -1012,7 +1013,7 @@ function goSet(){renderSet();go('set');}
 function toggleBig(){S.big=!S.big;saveSet();applyFs();renderSet();showToast(S.big?'已开启特大字号':'已恢复标准字号');}
 function toggleVib(){S.vib=!S.vib;saveSet();renderSet();if(S.vib)buzz(60);}
 function toggleVoice(){S.voice=!S.voice;saveSet();renderSet();}
-function openNurse(){ location.href = location.origin + '/'; }
+function openNurse(){ location.href = '../'; }
 
 /* ================= 时钟 ================= */
 function tick(){

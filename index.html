@@ -6,6 +6,7 @@
 <meta name="theme-color" content="#1F6FE0">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>分诊工作台 · 护士端</title>
+<script src="api-proxy.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
 <style>
   :root{
@@ -1066,7 +1067,7 @@ async function sosAct(type,id){
 function tgl(el,key){el.classList.toggle('on');settings[key]=el.classList.contains('on');saveSettings();}
 function openSettings(){
   applyNurse();
-  const t2=$('#watchUrlTxt');if(t2)t2.textContent=location.origin+'/watch/';
+  const t2=$('#watchUrlTxt');if(t2)t2.textContent=location.href.replace(/index\.html?$/,'').replace(/\/$/,'')+'/watch/';
   $('#tgVoice').classList.toggle('on',settings.voice);
   $('#tgVibrate').classList.toggle('on',settings.vibrate);
   renderDash();
@@ -1096,8 +1097,8 @@ function logout(){
   nurse={no:'',name:'',desk:'门诊一楼 分诊台 A'};
   applyNurse();$('#loginOverlay').classList.add('show');
 }
-function openWatchUrl(){ location.href = location.origin + '/watch/'; }
-function copyWatchUrl(){ copyText(location.origin+'/watch/'); }
+function openWatchUrl(){ location.href = location.href.replace(/index\.html?$/,'').replace(/\/$/,'') + '/watch/'; }
+function copyWatchUrl(){ copyText(location.href.replace(/index\.html?$/,'').replace(/\/$/,'') + '/watch/'); }
 function copyText(u){
   const ok=()=>showToast('地址已复制');
   const fb=()=>{

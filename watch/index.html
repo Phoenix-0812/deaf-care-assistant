@@ -439,8 +439,9 @@
         <div class="sub" id="setEmpty" style="margin-top:10px;display:none;text-align:center;">手表尚未绑定患者，绑定后此处显示个人信息</div>
         <div class="setblock">
           <div class="srow"><span>🔠 特大字号</span><span class="switch" id="swBig" onclick="toggleBig()"></span></div>
-          <div class="srow"><span>📳 震动反馈</span><span class="switch on" id="swVib" onclick="toggleVib()"></span></div>
+          <div class="srow"><span id="vibLabel">📳 震动反馈</span><span class="switch on" id="swVib" onclick="toggleVib()"></span></div>
           <div class="srow"><span>📢 语音播报</span><span class="switch on" id="swVoice" onclick="toggleVoice()"></span></div>
+          <div class="srow"><span>🤖 自动演示流程</span><span class="switch on" id="swAuto" onclick="toggleAuto()"></span></div>
         </div>
         <div class="setblock">
           <div class="srow"><span>设备型号</span><span class="v">CareWatch S1</span></div>
@@ -470,7 +471,7 @@ let BAND_ID=(qs.get('band')||'A024').toUpperCase();
 let band={bound:false,data:null,exam:null,examStep:0,med:null,callData:null};
 let flowCur=1,curPage='bind';
 
-let S={big:false,vib:true,voice:true};
+let S={big:false,vib:true,voice:true,auto:true};
 try{Object.assign(S,JSON.parse(localStorage.getItem('wb_bandset')||'{}'));}catch(e){}
 function saveSet(){try{localStorage.setItem('wb_bandset',JSON.stringify(S));}catch(e){}}
 
@@ -501,6 +502,9 @@ function buzz(p){
   if(!S.vib)return;
   if(navigator.vibrate){try{navigator.vibrate(p||[180,90,180]);}catch(e){}}
 }
+const VIB_OK = 'vibrate' in navigator;
+/* 首次交互解锁震动（部分浏览器需要用户手势后才允许 vibrate） */
+document.addEventListener('pointerdown',function v(){ try{navigator.vibrate&&navigator.vibrate(8);}catch(e){} document.removeEventListener('pointerdown',v); },{once:true});
 
 /* ================= 内置二维码（字节模式 v1-2 / 纠错M / 掩码0） ================= */
 const QR_EXP=new Array(512),QR_LOG=new Array(256);
@@ -695,12 +699,19 @@ function renderStatus(){
 }
 
 /* ================= 叫号 ================= */
+let callBuzzTimer=null;
 function showCall(c){
   band.callData=c;
   $('#callRoom').textContent=c.room;
   $('#callTxt').textContent=(c.no||'')+' '+(c.name||'')+' 请就诊';
   go('call');renderStatus();
   buzz([600,200,600,200,600,200,600]);
+  /* 叫号期间持续震动（直到确认或离开），防止单一下没感觉 */
+  clearInterval(callBuzzTimer);
+  callBuzzTimer=setInterval(()=>{
+    if(curPage!=='call'||!band.callData){clearInterval(callBuzzTimer);callBuzzTimer=null;return;}
+    buzz([400,150,400]);
+  },1800);
   if(S.voice&&window.speechSynthesis){
     try{const u=new SpeechSynthesisUtterance('请'+(c.no||'')+'号到'+c.room+'就诊');u.lang='zh-CN';u.rate=.9;
       speechSynthesis.cancel();speechSynthesis.speak(u);}catch(e){}
@@ -709,8 +720,36 @@ function showCall(c){
 function ackCall(){
   band.callData=null;flowCur=2;
   if(band.data)band.data.status='就诊中';
+  clearInterval(callBuzzTimer);callBuzzTimer=null;
   post({type:'ack',band:BAND_ID});
   go('home');renderHome();showToast('已确认，导航已就绪');buzz(80);
+}
+
+/* ================= 自动演示流程（模拟医院系统自动推进） ================= */
+/* 绑定后自动走：候诊 → 叫号(震动) → 就诊 → 检查 → 取药 → 完成；每一步都广播到护士端 */
+const AUTO_EXAM=[{t:'吸气',d:'跟随震动，慢慢吸气',i:'🫁'},{t:'屏住',d:'保持不动，持续震动',i:'⏸️'},{t:'可以呼吸',d:'扫描完成，请放松',i:'✅'}];
+const AUTO_MEDS=[{i:'💊',n:'头孢克肟胶囊',u:'一天 2 次，每次 1 粒，饭后服用'},{i:'💧',n:'左氧氟沙星滴耳液',u:'一天 3 次，每次 2 滴'}];
+let autoTimers=[];
+function stopAutoFlow(){autoTimers.forEach(clearTimeout);autoTimers=[];}
+function startAutoFlow(){
+  stopAutoFlow();
+  if(!S.auto)return;
+  const steps=[
+    {t:8000, guard:()=>band.data&&band.data.status==='候诊中'&&!band.callData, body:()=>({type:'call',band:BAND_ID})},
+    {t:16000,guard:()=>!!band.callData||(band.data&&band.data.status==='已叫号'), body:()=>({type:'ack',band:BAND_ID})},
+    {t:28000,guard:()=>band.data&&band.data.status==='就诊中'&&!band.exam, body:()=>({type:'exam',band:BAND_ID,examName:'CT 平扫',steps:AUTO_EXAM})},
+    {t:38000,guard:()=>!!band.exam, body:()=>({type:'examNext',band:BAND_ID})},
+    {t:46000,guard:()=>!!band.exam, body:()=>({type:'examNext',band:BAND_ID})},
+    {t:54000,guard:()=>!!band.exam, body:()=>({type:'examDone',band:BAND_ID})},
+    {t:66000,guard:()=>band.bound&&!band.med, body:()=>({type:'med',band:BAND_ID,win:'药房 3 号窗口',meds:AUTO_MEDS})},
+    {t:78000,guard:()=>!!band.med, body:()=>({type:'medAck',band:BAND_ID})},
+    {t:86000,guard:()=>band.bound, body:()=>({type:'finish',band:BAND_ID})},
+  ];
+  steps.forEach(st=>autoTimers.push(setTimeout(()=>{
+    if(!band.bound)return;
+    if(st.guard&&!st.guard())return;
+    post(st.body());
+  },st.t)));
 }
 
 /* ================= 导航（楼层地图） ================= */
@@ -920,6 +959,8 @@ function showDone(){
   },1000);
 }
 function resetToBind(){
+  stopAutoFlow();
+  clearInterval(callBuzzTimer);callBuzzTimer=null;
   band={bound:false,data:null,exam:null,examStep:0,med:null,callData:null};
   flowCur=1;go('bind');renderBind();renderSet();
 }
@@ -970,6 +1011,7 @@ function applySession(s){
     if(band.bound){
       band.bound=false;band.data=null;band.exam=null;band.med=null;band.callData=null;
       lastCallToken=null;lastExamToken=null;lastMedToken=null;
+      stopAutoFlow();
       showDone();
     }
     return;
@@ -981,6 +1023,8 @@ function applySession(s){
   flowCur=mapFlow(p.status);
 
   if(!s.call)band.callData=null;
+  if(!s.exam)band.exam=null;
+  if(!s.med)band.med=null;
   if(s.call&&s.call.token!==lastCallToken){
     lastCallToken=s.call.token;
     showCall(s.call);
@@ -999,8 +1043,14 @@ function applySession(s){
     band.med={win:s.med.win,meds:s.med.meds||[]};
     go('med');renderMed();renderStatus();buzz();
   }
+  /* 对端清除了叫号/检查/取药时，自动回主页 */
+  if(curPage==='call'&&!band.callData){go('home');}
+  if(curPage==='exam'&&!band.exam){go('home');}
+  if(curPage==='med'&&!band.med){go('home');}
   if(fresh){
     go('home');renderHome();buzz([150,80,150]);
+    showToast('已接入医院叫号系统，进度自动更新');
+    startAutoFlow();
   }else if(curPage==='home'){
     renderHome();
   }else if(curPage==='set'){
@@ -1030,11 +1080,19 @@ function renderSet(){
   $('#swBig').classList.toggle('on',S.big);
   $('#swVib').classList.toggle('on',S.vib);
   $('#swVoice').classList.toggle('on',S.voice);
+  $('#swAuto').classList.toggle('on',S.auto);
+  const vl=$('#vibLabel');
+  if(vl)vl.textContent=VIB_OK?'📳 震动反馈':'📳 震动反馈（本机不支持）';
 }
 function goSet(){renderSet();go('set');}
 function toggleBig(){S.big=!S.big;saveSet();applyFs();renderSet();showToast(S.big?'已开启特大字号':'已恢复标准字号');}
 function toggleVib(){S.vib=!S.vib;saveSet();renderSet();if(S.vib)buzz(60);}
 function toggleVoice(){S.voice=!S.voice;saveSet();renderSet();}
+function toggleAuto(){
+  S.auto=!S.auto;saveSet();renderSet();
+  if(S.auto&&band.bound){startAutoFlow();showToast('自动演示已开启');}
+  else{stopAutoFlow();showToast('自动演示已关闭');}
+}
 function openNurse(){ location.href = '../'; }
 
 /* ================= 时钟 ================= */

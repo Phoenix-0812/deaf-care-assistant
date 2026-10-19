@@ -208,7 +208,9 @@
       broadcast(); notifyUI();
       return {code:0};
     }
+    /* 患者定位：优先 patientId（护士端）；手表端只知道自己的 band，也支持用 band 定位 */
     var p = body.patientId ? state.patients.find(function(x){ return x.id===Number(body.patientId); }) : null;
+    if(!p && body.band && t!=='bind') p = activePatientByBand(String(body.band).toUpperCase());
     switch(t){
       case 'bind':{
         var band = String(body.band||'').toUpperCase();

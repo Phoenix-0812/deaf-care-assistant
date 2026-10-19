@@ -73,6 +73,7 @@
   @keyframes statBlink{50%{background:var(--danger-soft);}}
 
   .main-content{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;touch-action:pan-y;
+    overscroll-behavior:contain;
     padding:4px 16px calc(var(--tab-height) + 18px);scrollbar-width:none;}
   .main-content::-webkit-scrollbar{display:none;}
   .page{display:none;animation:fadeIn .22s ease;}
@@ -233,6 +234,7 @@
   .overlay.show{display:flex;animation:ovIn .2s ease;}
   @keyframes ovIn{from{opacity:0;}to{opacity:1;}}
   .sheet{width:100%;max-width:430px;max-height:88vh;overflow-y:auto;background:var(--bg);
+    -webkit-overflow-scrolling:touch;touch-action:pan-y;overscroll-behavior:contain;
     border-radius:26px 26px 0 0;border-top:2px solid var(--ols);
     padding:12px 18px calc(18px + env(safe-area-inset-bottom));animation:sheetUp .28s ease;
     scrollbar-width:none;position:relative;}
@@ -471,19 +473,13 @@
       <div class="glass-card">
         <div class="h3">患者设备</div>
         <div class="text-sub" style="margin-top:6px;" id="bandPoolTxt"></div>
-        <div class="list-item" style="margin-top:8px;"><span>📿 手环端（细长屏）</span>
-          <span style="display:flex;gap:6px;">
-            <button class="btn btn-ghost btn-sm" onclick="copyBandUrl()">复制</button>
-            <button class="btn btn-primary btn-sm" onclick="openBandUrl()">打开</button>
-          </span></div>
-        <div class="text-sub" id="bandUrlTxt" style="word-break:break-all;color:var(--primary);font-weight:800;"></div>
-        <div class="list-item" style="margin-top:8px;"><span>⌚ 手表端（方屏）</span>
+        <div class="list-item" style="margin-top:8px;"><span>⌚ 患者端（手表 / 手机打开）</span>
           <span style="display:flex;gap:6px;">
             <button class="btn btn-ghost btn-sm" onclick="copyWatchUrl()">复制</button>
             <button class="btn btn-primary btn-sm" onclick="openWatchUrl()">打开</button>
           </span></div>
         <div class="text-sub" id="watchUrlTxt" style="word-break:break-all;color:var(--primary);font-weight:800;"></div>
-        <div class="ver-tag" id="verTag">版本 v4.0</div>
+        <div class="ver-tag" id="verTag">版本 v5.0</div>
       </div>
     </div>
   </div>
@@ -1070,7 +1066,6 @@ async function sosAct(type,id){
 function tgl(el,key){el.classList.toggle('on');settings[key]=el.classList.contains('on');saveSettings();}
 function openSettings(){
   applyNurse();
-  const t=$('#bandUrlTxt');if(t)t.textContent=location.origin+'/band/';
   const t2=$('#watchUrlTxt');if(t2)t2.textContent=location.origin+'/watch/';
   $('#tgVoice').classList.toggle('on',settings.voice);
   $('#tgVibrate').classList.toggle('on',settings.vibrate);
@@ -1101,7 +1096,6 @@ function logout(){
   nurse={no:'',name:'',desk:'门诊一楼 分诊台 A'};
   applyNurse();$('#loginOverlay').classList.add('show');
 }
-function openBandUrl(){ location.href = location.origin + '/band/'; }
 function openWatchUrl(){ location.href = location.origin + '/watch/'; }
 function copyWatchUrl(){ copyText(location.origin+'/watch/'); }
 function copyText(u){
@@ -1115,7 +1109,6 @@ function copyText(u){
   if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(u).then(ok).catch(fb);}
   else fb();
 }
-function copyBandUrl(){ copyText(location.origin+'/band/'); }
 
 /* ================= 启动 ================= */
 applyNurse();

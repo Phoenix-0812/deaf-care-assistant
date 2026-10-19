@@ -9,7 +9,7 @@ const PORT = process.env.PORT || 3000;
 const ROOT = __dirname;
 const DATA = path.join(ROOT, 'state.json');
 
-const APP_VER = '4.0';
+const APP_VER = '5.0';
 const MIME = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'application/javascript; charset=utf-8',
@@ -319,8 +319,12 @@ const server = http.createServer((req, res) => {
   if (pathname === '/' || pathname === '/index.html'
     || pathname === '/nurse' || pathname === '/nurse/' || pathname === '/nurse.html'
     || pathname === '/index') return serveFile(res, path.join(ROOT, 'index.html'));
+  /* 手环端已下线：旧链接统一重定向到手表端 */
   if (pathname === '/band' || pathname === '/band/' || pathname === '/band.html'
-    || pathname === '/patient' || pathname === '/patient/') return serveFile(res, path.join(ROOT, 'band', 'index.html'));
+    || pathname === '/patient' || pathname === '/patient/') {
+    res.writeHead(302, { Location: '/watch/' });
+    return res.end();
+  }
   if (pathname === '/watch' || pathname === '/watch/' || pathname === '/watch.html') return serveFile(res, path.join(ROOT, 'watch', 'index.html'));
 
   const safe = path.normalize(pathname).replace(/^(\.\.[/\\])+/, '');

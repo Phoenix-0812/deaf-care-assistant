@@ -50,13 +50,17 @@
     .screen{padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom);}
   }
 
-  /* ---------- 页面 ---------- */
-  .page{position:absolute;inset:0;display:none;flex-direction:column;padding:14px 18px 18px;overflow:hidden;}
+  /* ---------- 页面（整页可滚动，滑到底部不丢内容） ---------- */
+  .page{position:absolute;inset:0;display:none;flex-direction:column;padding:14px 18px 18px;
+    overflow-y:auto;-webkit-overflow-scrolling:touch;touch-action:pan-y;overscroll-behavior:contain;
+    scrollbar-width:none;}
+  .page::-webkit-scrollbar{display:none;}
   .page.active{display:flex;animation:pin .26s ease;}
   @keyframes pin{from{opacity:0;transform:translateY(8px) scale(.99);}to{opacity:1;transform:none;}}
 
-  /* ---------- 顶栏 ---------- */
-  .topbar{display:flex;align-items:center;justify-content:space-between;flex:0 0 auto;height:36px;gap:8px;}
+  /* ---------- 顶栏（滚动时吸顶） ---------- */
+  .topbar{display:flex;align-items:center;justify-content:space-between;flex:0 0 auto;height:36px;gap:8px;
+    position:sticky;top:-14px;margin:-14px -18px 0;padding:14px 18px 8px;background:var(--screen);z-index:10;}
   .topbar>b,.topbar>span.t{font-size:1rem;font-weight:800;}
   .bandtag{display:inline-flex;align-items:center;gap:5px;background:#fff;border:1.6px solid var(--ols);
     border-radius:999px;padding:3px 11px;font-size:0.8rem;font-weight:900;letter-spacing:.08em;
@@ -88,7 +92,7 @@
     font-size:0.72rem;font-weight:900;border:1.4px solid currentColor;}
 
   /* ---------- 绑定页 ---------- */
-  #pg-bind{align-items:center;text-align:center;justify-content:center;gap:12px;}
+  #pg-bind{align-items:center;text-align:center;justify-content:safe center;gap:12px;}
   .qr-box{position:relative;background:#fff;border:2px dashed var(--blue);border-radius:26px;padding:14px;
     box-shadow:4px 4px 0 var(--line);}
   .qr-box canvas{width:236px;height:236px;max-width:58vw;max-height:58vw;display:block;border-radius:10px;}
@@ -134,8 +138,8 @@
   .fstep.cur .fl{color:var(--blue);}
   @keyframes curp{50%{transform:scale(1.13);}}
 
-  .menu{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:repeat(2,min(150px,22vh));
-    align-content:center;gap:10px;margin-top:12px;flex:1;min-height:0;}
+  .menu{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:repeat(2,148px);
+    align-content:center;gap:10px;margin-top:12px;flex:0 0 auto;}
   .mbtn{background:#fff;border:1.6px solid var(--ols);border-radius:20px;box-shadow:3px 3px 0 var(--line);
     display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;
     font-size:0.95rem;font-weight:900;cursor:pointer;padding:8px;overflow:hidden;transition:transform .08s;}
@@ -149,7 +153,7 @@
   .off{opacity:.4;pointer-events:none;}
 
   /* ---------- 叫号 ---------- */
-  #pg-call{background:linear-gradient(165deg,#19AEBE,#0B6E86);align-items:center;justify-content:center;
+  #pg-call{background:linear-gradient(165deg,#19AEBE,#0B6E86);align-items:center;justify-content:safe center;
     text-align:center;padding:22px;}
   #pg-call::before{content:"";position:absolute;inset:0;pointer-events:none;animation:edge 1s infinite;}
   @keyframes edge{0%,100%{box-shadow:inset 0 0 0 12px rgba(255,255,255,.92);}50%{box-shadow:inset 0 0 0 12px rgba(255,255,255,0);}}
@@ -162,16 +166,26 @@
   #pg-call .btnrow{width:100%;position:relative;z-index:3;}
 
   /* ---------- 导航 ---------- */
-  .navlist{flex:1;display:flex;flex-direction:column;gap:9px;overflow-y:auto;margin-top:12px;min-height:0;}
+  .navlist{flex:0 0 auto;display:flex;flex-direction:column;gap:9px;margin-top:12px;}
   .navitem{display:flex;align-items:center;gap:12px;background:#fff;border:1.6px solid var(--ols);
     border-radius:18px;padding:14px;font-size:1.1rem;font-weight:800;box-shadow:3px 3px 0 var(--line);}
   .navitem .na{font-size:1.5rem;width:34px;text-align:center;flex:0 0 auto;}
   .navitem.cur{background:var(--blue-soft);border-color:var(--blue);color:var(--blue);}
   .navitem.end{background:var(--teal-soft);border-color:var(--teal);color:var(--teal-2);}
 
+  /* ---------- 导航地图 ---------- */
+  .navdst{display:flex;align-items:center;gap:10px;margin-top:10px;background:var(--blue-soft);
+    border:1.6px solid var(--blue);border-radius:16px;padding:10px 13px;box-shadow:3px 3px 0 var(--line);
+    flex:0 0 auto;}
+  .mapcard{margin-top:10px;padding:6px;flex:0 0 auto;}
+  #navMap{width:100%;height:auto;display:block;}
+  #navMap text{font-family:inherit;user-select:none;}
+  .maplegend{display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:8px;font-size:0.72rem;font-weight:800;
+    color:var(--ink2);flex:0 0 auto;padding:0 4px;}
+
   /* ---------- 词库 ---------- */
-  .catgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;flex:1;min-height:0;margin-top:10px;}
-  .wordgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;overflow-y:auto;flex:1;min-height:0;
+  .catgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;flex:0 0 auto;margin-top:10px;}
+  .wordgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;flex:0 0 auto;
     margin-top:10px;align-content:start;}
   .wbtn{border:1.6px dashed var(--line2);background:#fff;border-radius:16px;min-height:62px;font-size:0.95rem;
     font-weight:800;color:var(--ink);display:flex;align-items:center;justify-content:center;cursor:pointer;
@@ -180,14 +194,14 @@
   .wbtn.hot{border-style:solid;border-color:var(--blue);background:var(--blue-soft);color:var(--blue-2);}
 
   /* ---------- 整屏大字 ---------- */
-  #pg-word{align-items:center;justify-content:center;text-align:center;padding:32px 24px;background:#fff;}
+  #pg-word{align-items:center;justify-content:safe center;text-align:center;padding:32px 24px;background:#fff;}
   #pg-word .bigicon{font-size:3.6rem;margin-bottom:14px;}
   #pg-word .bigword{font-size:2.25rem;font-weight:900;line-height:1.32;color:var(--ink);}
   #pg-word .hint{position:absolute;bottom:26px;left:0;right:0;font-size:0.8rem;color:var(--ink2);font-weight:700;}
 
   /* ---------- 转字幕 ---------- */
-  .micwrap{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;
-    text-align:center;min-height:0;margin-top:10px;}
+  .micwrap{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;
+    text-align:center;margin-top:10px;}
   .micball{width:88px;height:88px;border-radius:50%;flex:0 0 auto;
     background:linear-gradient(135deg,#25C0AE,#0B807E);color:#fff;font-size:2.1rem;
     display:flex;align-items:center;justify-content:center;cursor:pointer;border:1.6px solid var(--ols);
@@ -195,14 +209,14 @@
   .micball:active{transform:translate(2px,2px);box-shadow:1px 1px 0 var(--line);}
   .micball.on{animation:micp 1.2s infinite;}
   @keyframes micp{0%,100%{box-shadow:0 0 0 0 rgba(244,87,76,.45);}70%{box-shadow:0 0 0 24px rgba(244,87,76,0);}}
-  .sttout{width:100%;flex:1;min-height:120px;background:#fff;border:1.6px dashed var(--line2);border-radius:18px;
+  .sttout{width:100%;flex:0 0 auto;min-height:150px;max-height:36vh;background:#fff;border:1.6px dashed var(--line2);border-radius:18px;
     padding:14px;font-size:1.15rem;font-weight:800;line-height:1.5;color:var(--ink);overflow-y:auto;
-    box-shadow:3px 3px 0 var(--line);}
+    -webkit-overflow-scrolling:touch;box-shadow:3px 3px 0 var(--line);}
   .sttout .ph{color:var(--ink2);font-weight:600;font-size:0.9rem;}
 
   /* ---------- 检查 ---------- */
-  .examstage{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;
-    text-align:center;min-height:0;}
+  .examstage{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;
+    text-align:center;padding:14px 0;}
   .examact{font-size:2.4rem;font-weight:900;line-height:1.1;}
   .examring{width:150px;height:150px;border-radius:50%;display:flex;align-items:center;justify-content:center;
     font-size:3.2rem;margin:10px 0;}
@@ -216,7 +230,7 @@
   .examprog i.ok{background:var(--teal);}
 
   /* ---------- 取药 ---------- */
-  .medlist{flex:1;overflow-y:auto;min-height:0;margin-top:6px;}
+  .medlist{flex:0 0 auto;margin-top:6px;}
   .medrow{display:flex;align-items:center;gap:10px;background:#fff;border:1.6px solid var(--ols);
     border-radius:16px;padding:12px;margin-top:9px;font-size:1rem;font-weight:800;box-shadow:3px 3px 0 var(--line);}
   .medrow .mi{font-size:1.35rem;flex:0 0 auto;}
@@ -254,8 +268,8 @@
     border-radius:16px;padding:12px;font-size:0.92rem;text-align:center;display:none;z-index:40;
     font-weight:800;box-shadow:0 8px 20px rgba(23,48,71,.3);}
   /* 老内核滚动兼容 */
-  .navlist,.wordgrid,.medlist,.sttout{scrollbar-width:none;-webkit-overflow-scrolling:touch;touch-action:pan-y;}
-  .navlist::-webkit-scrollbar,.wordgrid::-webkit-scrollbar,.medlist::-webkit-scrollbar,.sttout::-webkit-scrollbar{display:none;}
+  .sttout{scrollbar-width:none;touch-action:pan-y;}
+  .sttout::-webkit-scrollbar{display:none;}
 </style>
 </head>
 <body>
@@ -318,9 +332,12 @@
         </div>
       </section>
 
-      <!-- ④ 导航 -->
+      <!-- ④ 导航（楼层地图） -->
       <section class="page" id="pg-nav">
         <div class="topbar"><b>🧭 科室导航</b><span class="xbtn" onclick="go('home')">✕</span></div>
+        <div class="navdst" id="navDest"></div>
+        <div class="card mapcard"><svg id="navMap" viewBox="0 0 400 344" role="img" aria-label="医院楼层地图"></svg></div>
+        <div class="maplegend"><span><b style="color:#1F6FE0;">●</b> 您的位置</span><span><b style="color:#1F6FE0;">┄┄</b> 跟着蓝线走</span><span>🚩 目的地</span></div>
         <div class="navlist" id="navList"></div>
         <div class="btnrow"><button class="btn btn-p" onclick="showToast('已重新定位');renderNav();">重新定位</button></div>
       </section>
@@ -387,7 +404,7 @@
       <!-- ⑪ 求助 -->
       <section class="page" id="pg-help">
         <div class="topbar"><b>🆘 一键求助</b><span class="xbtn" onclick="go('home')">✕</span></div>
-        <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;">
+        <div style="flex:0 0 auto;margin:auto;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;text-align:center;padding:20px 0;">
           <div class="helpicon">🆘</div>
           <div style="font-size:1.5rem;font-weight:900;margin-top:4px;">正在呼叫护士站…</div>
           <div class="sub">请留在原地，护士很快到达<br>也可以呼叫手语翻译</div>
@@ -400,7 +417,7 @@
 
       <!-- ⑫ 完成 -->
       <section class="page" id="pg-done">
-        <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;">
+        <div style="flex:0 0 auto;margin:auto;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:20px 0;">
           <div class="donering">✅</div>
           <div style="font-size:1.6rem;font-weight:900;">全部就诊完成</div>
           <div class="sub" style="margin-top:6px;">感谢您的配合，祝早日康复<br>手表即将回收</div>
@@ -426,12 +443,11 @@
         </div>
         <div class="setblock">
           <div class="srow"><span>设备型号</span><span class="v">CareWatch S1</span></div>
-          <div class="srow"><span>系统版本</span><span class="v">v4.0</span></div>
+          <div class="srow"><span>系统版本</span><span class="v">v5.0</span></div>
           <div class="srow"><span>手表编号</span><span class="v" id="setBandId">A024</span></div>
           <div class="srow"><span>状态</span><span class="v" id="setBindState">未绑定</span></div>
         </div>
         <div class="setblock">
-          <div class="srow"><span>⌚ 切换到手环端</span><span class="v" onclick="location.href=location.origin+'/band/'" style="color:#1F6FE0;font-weight:900;">打开 →</span></div>
           <div class="srow"><span>🩺 分诊台护士端</span><span class="v" id="openNurseBtn" onclick="openNurse()" style="color:#1F6FE0;font-weight:900;">打开 →</span></div>
         </div>
         <div style="flex:1;"></div>
@@ -654,7 +670,7 @@ function renderStatus(){
   }
   card.className='stcard wait';
   main.className='stbig blue';main.textContent='候诊中';
-  sub.textContent='前面还有 '+(d.queue!=null?d.queue:1)+' 人，请留意手环震动';
+  sub.textContent='前面还有 '+(d.queue!=null?d.queue:1)+' 人，请留意手表震动';
 }
 
 /* ================= 叫号 ================= */
@@ -676,12 +692,71 @@ function ackCall(){
   go('home');renderHome();showToast('已确认，导航已就绪');buzz(80);
 }
 
-/* ================= 导航 ================= */
+/* ================= 导航（楼层地图） ================= */
+/* 一楼平面：北排/南排各 5 个科室，中间走廊，底部大厅（服务台为起点） */
+const DEPT_POS={
+  '耳鼻喉科':{x:20,y:22,side:'n'},'骨科':{x:94,y:22,side:'n'},'心内科':{x:168,y:22,side:'n'},
+  '眼科':{x:242,y:22,side:'n'},'神经内科':{x:316,y:22,side:'n'},
+  '消化内科':{x:20,y:166,side:'s'},'妇产科':{x:94,y:166,side:'s'},'呼吸内科':{x:168,y:166,side:'s'},
+  '儿科':{x:242,y:166,side:'s'},'放射科':{x:316,y:166,side:'s'}
+};
+function buildMapSVG(dept,cx,doorY){
+  const rooms=Object.keys(DEPT_POS).map(k=>{
+    const r=DEPT_POS[k],tgt=k===dept;
+    return `<rect x="${r.x}" y="${r.y}" width="64" height="66" rx="10"
+        fill="${tgt?'#FFF0D8':'#FFFFFF'}" stroke="${tgt?'#E8961F':'#C3DDEE'}" stroke-width="${tgt?2.6:1.6}"/>
+      ${tgt?`<text x="${r.x+32}" y="${r.y+25}" font-size="15" text-anchor="middle">🚩</text>`:''}
+      <text x="${r.x+32}" y="${r.y+(tgt?48:41)}" font-size="${tgt?12:11}" font-weight="900"
+        text-anchor="middle" fill="${tgt?'#B06B08':'#5A7C93'}">${k}</text>`;
+  }).join('');
+  return `
+  <rect x="8" y="8" width="384" height="328" rx="16" fill="#F4FAFE" stroke="#2C4C66" stroke-width="2"/>
+  ${rooms}
+  <rect x="16" y="96" width="368" height="62" fill="#E4F0FE"/>
+  <line x1="16" y1="96" x2="384" y2="96" stroke="#9EC6E0" stroke-width="1.6" stroke-dasharray="6 5"/>
+  <line x1="16" y1="158" x2="384" y2="158" stroke="#9EC6E0" stroke-width="1.6" stroke-dasharray="6 5"/>
+  <text x="36" y="122" font-size="14" text-anchor="middle">🛗</text>
+  <text x="36" y="143" font-size="9" font-weight="800" text-anchor="middle" fill="#5A7C93">电梯</text>
+  <text x="364" y="122" font-size="14" text-anchor="middle">🚻</text>
+  <text x="364" y="143" font-size="9" font-weight="800" text-anchor="middle" fill="#5A7C93">卫生间</text>
+  <text x="118" y="272" font-size="13" text-anchor="middle">🪑</text>
+  <text x="118" y="288" font-size="9" font-weight="800" text-anchor="middle" fill="#5A7C93">候诊区</text>
+  <text x="70" y="306" font-size="13" text-anchor="middle">💰</text>
+  <text x="70" y="322" font-size="9" font-weight="800" text-anchor="middle" fill="#5A7C93">收费处</text>
+  <text x="330" y="306" font-size="13" text-anchor="middle">💊</text>
+  <text x="330" y="322" font-size="9" font-weight="800" text-anchor="middle" fill="#5A7C93">药房</text>
+  <text x="200" y="324" font-size="12" font-weight="800" text-anchor="middle" fill="#5A7C93">🚪 入口</text>
+  <path d="M 200 270 L 200 127 L ${cx} 127 L ${cx} ${doorY}" fill="none" stroke="#1F6FE0"
+    stroke-width="5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="12 9">
+    <animate attributeName="stroke-dashoffset" from="42" to="0" dur="1s" repeatCount="indefinite"/>
+  </path>
+  <circle cx="200" cy="270" r="8" fill="#1F6FE0" opacity=".5">
+    <animate attributeName="r" values="8;24" dur="1.6s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values=".55;0" dur="1.6s" repeatCount="indefinite"/>
+  </circle>
+  <circle cx="200" cy="270" r="7.5" fill="#1F6FE0" stroke="#fff" stroke-width="2.5"/>
+  <text x="214" y="266" font-size="12" font-weight="900" fill="#173047">🛎️ 服务台</text>
+  <text x="214" y="284" font-size="10" font-weight="900" fill="#1F6FE0">您在这里</text>`;
+}
 function renderNav(){
-  const d=band.data;
-  const steps=(d&&d.nav)||[{a:'↑',t:'直行 20 米'},{a:'→',t:'左转'},{a:'●',t:'到达 3 诊室',end:1}];
-  $('#navList').innerHTML=steps.map((s,i)=>
-    `<div class="navitem ${s.end?'end':(i===0?'cur':'')}"><span class="na">${s.a}</span><span>${s.t}</span></div>`).join('');
+  const d=band.data||{};
+  const dept=d.dept||'耳鼻喉科', room=d.room||'3 诊室';
+  const rm=DEPT_POS[dept]||DEPT_POS['耳鼻喉科'];
+  const cx=rm.x+32, doorY=rm.side==='n'?97:157;
+  $('#navDest').innerHTML=
+    `<span style="font-size:1.5rem;flex:0 0 auto;">🚩</span><div style="flex:1;min-width:0;">
+      <div style="font-weight:900;font-size:1.05rem;color:var(--blue-2);">前往：${dept} · ${room}</div>
+      <div class="sub" style="font-size:0.75rem;">跟着地图上的蓝色虚线走</div></div>`;
+  $('#navMap').innerHTML=buildMapSVG(dept,cx,doorY);
+  const east=cx>204,west=cx<196;
+  const steps=[{a:'🛎️',t:'您在一楼大厅 · 服务台',cur:1}];
+  if(east||west)steps.push({a:east?'👉':'👈',t:'沿走廊向'+(east?'右':'左')+'走约 '+(Math.round(Math.abs(cx-200)/8)+6)+' 米'});
+  else steps.push({a:'⬆️',t:'从服务台正前方进入走廊'});
+  const hand=(!east&&!west)?'正前方':(rm.side==='n'?(east?'左':'右'):(east?'右':'左'));
+  steps.push({a:'🚪',t:hand==='正前方'?'科室门就在正前方':('科室门在您的'+hand+'手边')});
+  steps.push({a:'🚩',t:'到达 '+dept+' · '+room,end:1});
+  $('#navList').innerHTML=steps.map(s=>
+    `<div class="navitem ${s.end?'end':(s.cur?'cur':'')}"><span class="na">${s.a}</span><span>${s.t}</span></div>`).join('');
 }
 
 /* ================= 词库 ================= */
@@ -844,7 +919,7 @@ function mapFlow(status){
   if(status==='已完成')return 5;
   return 1;
 }
-const APP_VER='4.0';
+const APP_VER='5.0';
 let netOk=true;
 async function pull(){
   let s=null;
@@ -881,9 +956,7 @@ function applySession(s){
   const p=s.patient;
   const fresh=!band.bound||!band.data||band.data.no!==p.no;
   band.bound=true;
-  band.data={name:p.name,no:p.no,dept:p.dept,room:p.room,need:p.need,status:p.status,
-    nav:(band.data&&band.data.no===p.no&&band.data.nav)?band.data.nav:
-      [{a:'↑',t:'直行 20 米'},{a:'→',t:'左转'},{a:'●',t:'到达 '+p.room,end:1}]};
+  band.data={name:p.name,no:p.no,dept:p.dept,room:p.room,need:p.need,status:p.status};
   flowCur=mapFlow(p.status);
 
   if(!s.call)band.callData=null;

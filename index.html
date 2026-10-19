@@ -1,0 +1,1128 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#1F6FE0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>分诊工作台 · 护士端</title>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+<style>
+  :root{
+    --bg:#EAF3FA;--card:#FFFFFF;--line:#C3DDEE;--line2:#9EC6E0;
+    --ink:#173047;--ols:#2C4C66;--sub:#5A7C93;
+    --primary:#1F6FE0;--primary-2:#1557B8;--primary-soft:#E4F0FE;
+    --danger:#F4574C;--danger-soft:#FFE7E4;
+    --success:#0FA3A0;--success-2:#0B807E;--success-soft:#DDF4F2;
+    --warn:#E8961F;--warn-soft:#FFF0D8;
+    --purple:#6E56D8;--purple-soft:#EDE9FE;
+    --tab-height:78px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    -webkit-tap-highlight-color:transparent;}
+  body{background:#DCEBF6;color:var(--ink);height:100vh;height:100dvh;overflow:hidden;display:flex;flex-direction:column;
+    user-select:none;background-image:radial-gradient(#C6DEF0 1.2px,transparent 1.2px);background-size:18px 18px;}
+  .app{width:100%;max-width:430px;margin:0 auto;height:100%;display:flex;flex-direction:column;position:relative;
+    background:var(--bg);box-shadow:0 0 60px rgba(23,48,71,.16);overflow:hidden;}
+  button{font-family:inherit;}
+
+  /* ===== 状态栏 ===== */
+  .status-bar{height:32px;padding:6px 20px 0;display:flex;justify-content:space-between;align-items:center;
+    font-size:12.5px;font-weight:800;color:var(--sub);flex:0 0 auto;}
+  .s-right{display:flex;align-items:center;gap:8px;}
+  .battery{display:inline-flex;align-items:center;gap:4px;}
+  .battery .shell{width:22px;height:11px;border:1.5px solid var(--sub);border-radius:3.5px;position:relative;}
+  .battery .shell::after{content:'';position:absolute;right:-4px;top:2.5px;width:2px;height:4px;background:var(--sub);border-radius:0 2px 2px 0;}
+  .battery .level{position:absolute;left:1.5px;top:1.5px;bottom:1.5px;background:var(--success);border-radius:1.5px;transition:width .4s;}
+
+  /* ===== 头部 ===== */
+  .app-header{padding:6px 20px 44px;flex:0 0 auto;position:relative;
+    background:linear-gradient(135deg,#1557B8 0%,#1F6FE0 55%,#18B0BE 100%);
+    border-radius:0 0 30px 30px;}
+  .app-header::after{content:"";position:absolute;left:16px;right:16px;bottom:14px;height:0;
+    border-bottom:2px dashed rgba(255,255,255,.45);}
+  .app-header .t1{font-size:24px;font-weight:900;color:#fff;letter-spacing:.5px;}
+  .app-header .t2{font-size:12.5px;color:rgba(255,255,255,.9);margin-top:2px;font-weight:700;}
+  .hdr-row{display:flex;justify-content:space-between;align-items:center;position:relative;z-index:2;}
+  .role-chip{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:900;color:var(--blue);
+    background:#fff;border:1.5px solid var(--ols);border-radius:8px;padding:2px 7px;margin-bottom:5px;
+    box-shadow:2px 2px 0 var(--ols);letter-spacing:.5px;}
+  .hdr-btn{width:38px;height:38px;border-radius:50%;background:rgba(255,255,255,.24);
+    border:1.5px solid rgba(255,255,255,.7);display:flex;align-items:center;justify-content:center;
+    font-size:16px;cursor:pointer;position:relative;color:#fff;}
+  .hdr-btn:active{transform:scale(.94);}
+  .hdr-btn .dot{position:absolute;top:5px;right:5px;width:8px;height:8px;border-radius:50%;
+    background:#FFD66B;border:1.5px solid #1557B8;display:none;}
+  .hdr-btn .dot.on{display:block;animation:blink 1s infinite;}
+  @keyframes blink{50%{opacity:.2;}}
+
+  /* 悬浮统计卡 */
+  .float-stats{margin:-32px 16px 12px;display:grid;grid-template-columns:repeat(4,1fr);gap:8px;
+    position:relative;z-index:5;}
+  .stat-box{background:var(--card);border:1.5px solid var(--ols);border-radius:16px;padding:10px 3px;
+    text-align:center;cursor:pointer;transition:.12s;box-shadow:3px 3px 0 var(--line);}
+  .stat-box:active{transform:translate(2px,2px);box-shadow:1px 1px 0 var(--line);}
+  .stat-box .num{font-size:23px;font-weight:900;line-height:1.1;}
+  .stat-box .lbl{font-size:10.5px;color:var(--sub);margin-top:1px;font-weight:800;}
+  .stat-box.s-blue .num{color:var(--primary);}
+  .stat-box.s-green .num{color:var(--success);}
+  .stat-box.s-purple .num{color:var(--purple);}
+  .stat-box.s-red .num{color:var(--danger);}
+  .stat-box.alerting{animation:statBlink 1s infinite;border-color:var(--danger);}
+  @keyframes statBlink{50%{background:var(--danger-soft);}}
+
+  .main-content{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;touch-action:pan-y;
+    padding:4px 16px calc(var(--tab-height) + 18px);scrollbar-width:none;}
+  .main-content::-webkit-scrollbar{display:none;}
+  .page{display:none;animation:fadeIn .22s ease;}
+  .page.active{display:block;}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}
+
+  .glass-card{background:var(--card);border:1.5px solid var(--ols);border-radius:20px;padding:15px;margin-bottom:12px;
+    box-shadow:3px 3px 0 var(--line);}
+  .h2{font-size:20px;font-weight:900;}
+  .h3{font-size:15.5px;font-weight:900;}
+  .text-sub{font-size:12.5px;color:var(--sub);font-weight:700;line-height:1.5;}
+  .row{display:flex;align-items:center;justify-content:space-between;}
+
+  /* 叫号控制台 */
+  .console-card{background:linear-gradient(140deg,#E4F0FE,#F5FAFF);border-style:dashed;border-color:var(--primary);}
+  .console-room{font-size:13px;color:var(--primary);font-weight:900;}
+  .console-name{font-size:29px;font-weight:900;margin:3px 0;letter-spacing:.5px;}
+  .badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:11.5px;font-weight:900;
+    border:1.4px solid currentColor;}
+  .b-wait{background:var(--primary-soft);color:var(--primary);}
+  .b-called{background:var(--warn-soft);color:#B06B08;}
+  .b-visit{background:var(--success-soft);color:var(--success-2);}
+  .b-exam{background:var(--purple-soft);color:var(--purple);}
+  .b-done{background:#EEF5FA;color:var(--sub);border-color:var(--line2);}
+
+  .feed-item{display:flex;gap:9px;padding:8px 0;border-bottom:1.4px dashed #E1EEF8;font-size:12.5px;font-weight:700;}
+  .feed-item:last-child{border-bottom:none;}
+  .feed-dot{width:8px;height:8px;border-radius:50%;margin-top:5px;flex:0 0 auto;border:1.4px solid var(--ols);}
+  .f-time{margin-left:auto;color:var(--sub);font-size:11.5px;flex:0 0 auto;font-weight:800;}
+
+  /* 患者列表 */
+  .search-box{display:flex;align-items:center;gap:8px;background:#fff;border:1.5px solid var(--ols);
+    border-radius:14px;padding:9px 13px;margin-bottom:10px;box-shadow:3px 3px 0 var(--line);}
+  .search-box input{flex:1;background:none;border:none;outline:none;color:var(--ink);font-size:14.5px;font-weight:700;}
+  .search-box input::placeholder{color:#9EB6C6;font-weight:600;}
+  .filter-chips{display:flex;gap:7px;overflow-x:auto;padding-bottom:9px;scrollbar-width:none;}
+  .filter-chips::-webkit-scrollbar{display:none;}
+  .chip{flex:0 0 auto;padding:6px 13px;border-radius:20px;font-size:12.5px;font-weight:800;cursor:pointer;
+    background:#fff;border:1.5px solid var(--line2);color:var(--sub);}
+  .chip.on{background:var(--primary);border-color:var(--ols);color:#fff;box-shadow:2px 2px 0 var(--line);}
+  .patient-card{display:flex;align-items:center;gap:12px;background:#fff;border:1.5px solid var(--ols);
+    border-radius:18px;padding:12px;margin-bottom:10px;cursor:pointer;transition:.12s;box-shadow:3px 3px 0 var(--line);}
+  .patient-card:active{transform:translate(2px,2px);box-shadow:1px 1px 0 var(--line);}
+  .avatar{width:44px;height:44px;border-radius:14px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;
+    font-size:17px;font-weight:900;color:#fff;border:1.5px solid var(--ols);transform:rotate(-3deg);}
+  .p-name{font-size:14.5px;font-weight:900;}
+  .p-meta{font-size:11.5px;color:var(--sub);margin-top:2px;font-weight:700;}
+  .p-tag{font-size:11px;color:#B06B08;margin-top:2px;font-weight:800;}
+  .p-right{text-align:right;flex:0 0 auto;}
+  .p-time{font-size:10.5px;color:var(--sub);margin-top:5px;font-weight:700;}
+
+  /* 扫码 */
+  .scan-hero{text-align:center;padding:10px 0 4px;}
+  .scan-frame{width:215px;height:215px;margin:12px auto;position:relative;border-radius:24px;overflow:hidden;
+    background:#0E2436;border:2px dashed var(--primary);box-shadow:4px 4px 0 var(--line);}
+  .scan-frame video{width:100%;height:100%;object-fit:cover;}
+  .scan-frame .placeholder{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;gap:8px;color:#9FB6C8;font-size:13px;font-weight:700;}
+  .scan-frame .corner{position:absolute;width:32px;height:32px;border:4px solid #fff;border-radius:5px;z-index:3;}
+  .sc1{top:12px;left:12px;border-right:none;border-bottom:none;}
+  .sc2{top:12px;right:12px;border-left:none;border-bottom:none;}
+  .sc3{bottom:12px;left:12px;border-right:none;border-top:none;}
+  .sc4{bottom:12px;right:12px;border-left:none;border-top:none;}
+  .scan-line{position:absolute;left:16px;right:16px;height:3px;top:12px;z-index:2;display:none;
+    background:linear-gradient(90deg,transparent,#FFD66B,transparent);}
+  .scan-frame.scanning .scan-line{display:block;animation:scanMove 1.4s ease-in-out infinite;}
+  @keyframes scanMove{0%{top:12px;}50%{top:200px;}100%{top:12px;}}
+  .scan-err{background:var(--danger-soft);color:#B9352C;border:1.4px dashed var(--danger);border-radius:12px;
+    padding:9px 13px;font-size:12.5px;margin:10px 0;display:none;font-weight:700;text-align:left;line-height:1.5;}
+
+  .free-band-list{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;}
+  .free-band{padding:12px 3px;text-align:center;border-radius:14px;background:var(--primary-soft);
+    border:1.5px solid var(--line2);font-size:11.5px;font-weight:800;color:var(--sub);cursor:pointer;transition:.12s;}
+  .free-band:active{transform:translate(2px,2px);}
+  .free-band .bid{display:block;color:var(--primary);font-size:15px;font-weight:900;margin-top:2px;letter-spacing:.06em;}
+
+  /* 表单 */
+  .form-row{margin-bottom:12px;}
+  .form-label{font-size:12.5px;color:var(--sub);margin-bottom:6px;display:block;font-weight:800;}
+  .form-input,.form-select{width:100%;background:#F4FAFE;border:1.5px solid var(--line2);border-radius:12px;
+    padding:11px 13px;color:var(--ink);font-size:14.5px;outline:none;font-weight:700;}
+  .form-input::placeholder{color:#A3BACB;font-weight:600;}
+  .form-input:focus,.form-select:focus{border-color:var(--primary);background:#fff;}
+  .seg-gender{display:flex;gap:9px;}
+  .seg-gender .opt{flex:1;padding:10px;text-align:center;border-radius:12px;font-size:14.5px;font-weight:900;
+    background:#F4FAFE;border:1.5px solid var(--line2);color:var(--sub);cursor:pointer;}
+  .seg-gender .opt.on{background:var(--primary);border-color:var(--ols);color:#fff;box-shadow:2px 2px 0 var(--line);}
+  .need-chips{display:flex;gap:7px;flex-wrap:wrap;}
+  .nchip{padding:7px 12px;border-radius:20px;font-size:12.5px;cursor:pointer;background:#F4FAFE;
+    border:1.5px solid var(--line2);color:var(--sub);font-weight:800;}
+  .nchip.on{background:var(--warn-soft);border-color:var(--warn);color:#B06B08;}
+
+  /* 检查 */
+  .exam-template{display:flex;align-items:center;gap:11px;background:#fff;border:1.5px solid var(--ols);
+    border-radius:16px;padding:11px 13px;margin-bottom:10px;cursor:pointer;transition:.12s;
+    box-shadow:3px 3px 0 var(--line);}
+  .exam-template:active{transform:translate(2px,2px);box-shadow:1px 1px 0 var(--line);}
+  .exam-template.on{border-color:var(--primary);background:var(--primary-soft);}
+  .exam-icon{width:40px;height:40px;border-radius:12px;flex:0 0 auto;display:flex;align-items:center;
+    justify-content:center;font-size:19px;background:var(--primary-soft);border:1.5px dashed var(--primary);
+    transform:rotate(-4deg);}
+  .exam-steps-preview{font-size:10.5px;color:var(--sub);margin-top:3px;font-weight:700;}
+  .step-item{display:flex;align-items:center;gap:9px;padding:6px 0;font-size:12.5px;color:var(--sub);font-weight:700;}
+  .step-item .s-dot{width:9px;height:9px;border-radius:50%;background:#D8E7F2;flex:0 0 auto;
+    border:1.4px solid var(--line2);}
+  .step-item.done{color:var(--success-2);}.step-item.done .s-dot{background:var(--success);border-color:var(--success);}
+  .step-item.current{color:var(--ink);font-weight:900;}
+  .step-item.current .s-dot{background:var(--primary);border-color:var(--primary);}
+
+  /* 求助 */
+  .sos-card{border:2px solid var(--danger);border-radius:18px;padding:13px;margin-bottom:10px;
+    background:var(--danger-soft);animation:statBlink 1.2s infinite;}
+  .sos-card.handling{border-color:var(--warn);background:var(--warn-soft);animation:none;}
+  .sos-card.resolved{border-color:var(--line2);background:#fff;animation:none;opacity:.7;}
+  .sos-title{font-size:15px;font-weight:900;}
+  .sos-loc{font-size:11.5px;color:var(--sub);margin-top:2px;font-weight:700;}
+  .sos-kind{display:inline-block;padding:2px 9px;border-radius:12px;font-size:10.5px;font-weight:900;
+    margin-left:5px;border:1.4px solid currentColor;}
+  .k-interp{background:var(--purple-soft);color:var(--purple);}
+
+  /* 按钮 */
+  .btn{width:100%;padding:13px;border-radius:15px;font-size:15px;font-weight:900;text-align:center;
+    border:1.5px solid var(--ols);cursor:pointer;transition:.1s;color:#fff;box-shadow:3px 3px 0 var(--line);}
+  .btn:active{transform:translate(2px,2px);box-shadow:1px 1px 0 var(--line);}
+  .btn-primary{background:var(--primary);box-shadow:3px 3px 0 #14559F;}
+  .btn-primary:active{box-shadow:1px 1px 0 #14559F;}
+  .btn-success{background:var(--success);box-shadow:3px 3px 0 #0A6F6D;}
+  .btn-danger{background:var(--danger-soft);color:#B9352C;border-color:var(--danger);}
+  .btn-warn{background:var(--warn-soft);color:#B06B08;border-color:var(--warn);}
+  .btn-ghost{background:#fff;border-color:var(--line2);border-style:dashed;color:var(--ink);}
+  .btn-sm{padding:9px 13px;font-size:12.5px;border-radius:12px;width:auto;}
+  .btn:disabled{opacity:.45;pointer-events:none;}
+  .btn-row{display:flex;gap:9px;}
+
+  /* 底部导航 */
+  .tab-bar{position:absolute;bottom:0;left:0;right:0;height:var(--tab-height);
+    background:rgba(255,255,255,.95);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+    border-top:2px solid var(--ols);display:flex;justify-content:space-around;align-items:center;
+    padding-bottom:9px;z-index:50;}
+  .tab-item{display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--sub);
+    font-size:10.5px;font-weight:800;cursor:pointer;flex:1;transition:.2s;position:relative;}
+  .tab-item .icon{font-size:21px;margin-bottom:2px;filter:grayscale(.35);}
+  .tab-item.active{color:var(--primary);}
+  .tab-item.active .icon{filter:none;transform:translateY(-1px) scale(1.08);}
+  .tab-item .red-dot{position:absolute;top:0;right:calc(50% - 16px);width:8px;height:8px;border-radius:50%;
+    background:var(--danger);display:none;border:1.4px solid #fff;}
+  .tab-item .red-dot.on{display:block;animation:blink 1s infinite;}
+  .tab-scan{flex:1;display:flex;justify-content:center;}
+  .scan-fab{width:52px;height:52px;border-radius:50%;margin-top:-22px;border:2px solid var(--ols);
+    background:linear-gradient(135deg,#3E90EA,#1F6FE0);display:flex;align-items:center;justify-content:center;
+    font-size:22px;color:#fff;box-shadow:3px 3px 0 var(--line);cursor:pointer;transition:.12s;}
+  .scan-fab:active{transform:translate(2px,2px);box-shadow:1px 1px 0 var(--line);}
+  .scan-lbl{font-size:10.5px;font-weight:900;color:var(--primary);margin-top:1px;}
+
+  /* 弹层 */
+  .overlay{position:fixed;inset:0;background:rgba(14,36,54,.45);z-index:100;display:none;
+    align-items:flex-end;justify-content:center;backdrop-filter:blur(3px);}
+  .overlay.show{display:flex;animation:ovIn .2s ease;}
+  @keyframes ovIn{from{opacity:0;}to{opacity:1;}}
+  .sheet{width:100%;max-width:430px;max-height:88vh;overflow-y:auto;background:var(--bg);
+    border-radius:26px 26px 0 0;border-top:2px solid var(--ols);
+    padding:12px 18px calc(18px + env(safe-area-inset-bottom));animation:sheetUp .28s ease;
+    scrollbar-width:none;position:relative;}
+  .sheet::-webkit-scrollbar{display:none;}
+  @keyframes sheetUp{from{transform:translateY(60px);opacity:0;}to{transform:none;opacity:1;}}
+  .sheet-grab{width:40px;height:5px;border-radius:3px;background:var(--line2);margin:0 auto 12px;}
+  .sheet-title{font-size:18px;font-weight:900;}
+  .close-x{position:absolute;top:12px;right:15px;width:30px;height:30px;border-radius:50%;background:#fff;
+    border:1.5px solid var(--line2);display:flex;align-items:center;justify-content:center;font-size:13px;
+    cursor:pointer;z-index:5;font-weight:900;}
+
+  .timeline{margin-top:8px;}
+  .tl-item{display:flex;gap:11px;}
+  .tl-left{display:flex;flex-direction:column;align-items:center;flex:0 0 auto;}
+  .tl-dot{width:10px;height:10px;border-radius:50%;background:var(--primary);flex:0 0 auto;
+    border:1.4px solid var(--ols);}
+  .tl-dot.gray{background:#C9DCEA;}
+  .tl-line{width:2px;flex:1;background:repeating-linear-gradient(180deg,var(--line2) 0 4px,transparent 4px 8px);min-height:18px;}
+  .tl-txt{font-size:13px;font-weight:800;}
+  .tl-time{font-size:11.5px;color:var(--sub);font-weight:700;}
+  .tl-body{padding-bottom:11px;}
+
+  .list-item{display:flex;justify-content:space-between;align-items:center;padding:13px 0;
+    border-bottom:1.4px dashed #E1EEF8;font-size:14.5px;font-weight:800;}
+  .list-item:last-child{border-bottom:none;}
+  .list-item .v{color:var(--primary);font-weight:900;}
+  .toggle{width:48px;height:28px;background:#D6E6F3;border:1.5px solid var(--ols);border-radius:15px;
+    position:relative;cursor:pointer;transition:.3s;flex:0 0 auto;}
+  .toggle::after{content:'';position:absolute;width:21px;height:21px;border-radius:50%;background:#fff;
+    border:1.4px solid var(--ols);top:1.6px;left:2px;transition:.3s;box-sizing:border-box;}
+  .toggle.on{background:var(--success);}
+  .toggle.on::after{transform:translateX(21px);}
+
+  .toast{position:fixed;bottom:118px;left:50%;transform:translateX(-50%) translateY(10px);
+    background:rgba(23,48,71,.94);color:#fff;padding:10px 20px;border-radius:26px;font-size:13px;
+    font-weight:800;opacity:0;pointer-events:none;transition:.3s;z-index:999;max-width:82vw;text-align:center;}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+  .toast.err{background:#B9352C;}
+  .empty{text-align:center;padding:34px 0;color:var(--sub);font-size:13px;font-weight:700;}
+  .empty .e-icon{font-size:34px;margin-bottom:8px;opacity:.55;}
+  .b-free{background:#EEF5FA;color:var(--sub);border-color:var(--line2);border-style:dashed;}
+  .reg-item{display:flex;align-items:center;gap:11px;padding:10px 12px;border:1.5px solid var(--line);
+    border-radius:14px;margin-bottom:8px;background:#F8FCFF;cursor:pointer;transition:.12s;}
+  .reg-item:active{transform:scale(.99);}
+  .reg-item.on{border-color:var(--ols);background:var(--primary-soft);box-shadow:2px 2px 0 var(--line);}
+  .reg-pick{font-size:12px;font-weight:900;color:var(--primary);background:#fff;border:1.4px solid var(--primary);
+    border-radius:999px;padding:4px 10px;flex:0 0 auto;}
+  .reg-item.on .reg-pick{background:var(--primary);color:#fff;}
+  .net-banner{display:none;margin:0 0 10px;padding:10px 13px;border-radius:14px;background:var(--danger-soft);
+    border:1.5px dashed var(--danger);color:#B9352C;font-size:12.5px;font-weight:800;
+    align-items:center;gap:8px;justify-content:space-between;}
+  .net-banner.on{display:flex;}
+  .ver-tag{font-size:11px;color:var(--sub);font-weight:800;text-align:center;margin-top:10px;}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="status-bar">
+    <span id="clock">--:--</span>
+    <span class="s-right">
+      <span id="deskName">门诊一楼 分诊台 A</span>
+      <span class="battery"><span class="shell"><span class="level" id="battLevel" style="width:80%"></span></span><span id="battText">80%</span></span>
+    </span>
+  </div>
+
+  <div class="app-header">
+    <div class="hdr-row">
+      <div><div class="role-chip">🩺 护士端</div><div class="t1" id="pageTitle">工作台</div><div class="t2" id="pageSub">手环循环管理中心</div></div>
+      <div class="hdr-btn" onclick="openSettings()">⚙<span class="dot" id="sosGearDot"></span></div>
+    </div>
+  </div>
+
+  <div class="float-stats">
+    <div class="stat-box s-blue" onclick="gotoTab('patients','候诊中')"><div class="num" id="stWait">0</div><div class="lbl">候诊中</div></div>
+    <div class="stat-box s-green" onclick="gotoTab('patients','就诊中')"><div class="num" id="stVisit">0</div><div class="lbl">就诊/检查</div></div>
+    <div class="stat-box s-purple" onclick="gotoTab('exams')"><div class="num" id="stExam">0</div><div class="lbl">检查推送</div></div>
+    <div class="stat-box s-red" id="statSos" onclick="gotoTab('sos')"><div class="num" id="stSos">0</div><div class="lbl">求助中</div></div>
+  </div>
+
+  <div class="main-content">
+    <div class="net-banner" id="netBanner">
+      <span id="netBannerTxt">连接服务失败，正在重连…</span>
+      <button class="btn btn-ghost btn-sm" onclick="pull()">重试</button>
+    </div>
+
+    <!-- 工作台 -->
+    <div class="page active" id="page-dash">
+      <div class="glass-card console-card">
+        <div class="row"><span class="console-room" id="consoleRoom">—</span><span class="badge b-called" id="consoleBadge">待呼叫</span></div>
+        <div class="console-name" id="consoleName">暂无叫号</div>
+        <div class="text-sub" id="consoleSub">点击「呼叫下一位」开始叫号</div>
+        <div class="btn-row" style="margin-top:12px;">
+          <button class="btn btn-primary btn-sm" style="flex:1" onclick="callNext()">📢 呼叫下一位</button>
+          <button class="btn btn-ghost btn-sm" style="flex:1" onclick="recallCurrent()">🔁 重复播报</button>
+        </div>
+      </div>
+
+      <div class="glass-card">
+        <div class="row"><span class="h3">今日动态</span><span class="text-sub" id="feedCount"></span></div>
+        <div id="feedList" style="margin-top:6px;"></div>
+      </div>
+
+      <div class="glass-card">
+        <div class="h3">待办提醒</div>
+        <div id="todoList" style="margin-top:6px;"></div>
+      </div>
+    </div>
+
+    <!-- 患者 -->
+    <div class="page" id="page-patients">
+      <div class="search-box"><span>🔍</span><input id="searchInput" placeholder="搜索姓名 / 序号 / 手环号" oninput="renderPatients()"></div>
+      <div class="filter-chips" id="filterChips">
+        <span class="chip on" data-f="全部" onclick="setFilter(this)">全部</span>
+        <span class="chip" data-f="候诊中" onclick="setFilter(this)">候诊中</span>
+        <span class="chip" data-f="已叫号" onclick="setFilter(this)">已叫号</span>
+        <span class="chip" data-f="就诊中" onclick="setFilter(this)">就诊中</span>
+        <span class="chip" data-f="检查中" onclick="setFilter(this)">检查中</span>
+        <span class="chip" data-f="已完成" onclick="setFilter(this)">已完成</span>
+      </div>
+      <div id="patientList"></div>
+    </div>
+
+    <!-- 扫码绑定 -->
+    <div class="page" id="page-scan">
+      <div id="scanStage1">
+        <div class="glass-card">
+          <div class="row"><span class="h3">第一步 · 选择患者</span><span class="text-sub" id="regCount"></span></div>
+          <div class="text-sub" style="margin-top:4px;">患者挂号信息已由医院系统同步，直接点选本人，无需录入任何信息</div>
+          <div class="search-box" style="margin-top:10px;"><span>🔍</span><input id="regSearch" placeholder="搜索姓名 / 候诊序号" oninput="renderReg()"></div>
+          <div id="regList" style="max-height:236px;overflow-y:auto;-webkit-overflow-scrolling:touch;"></div>
+        </div>
+        <div class="glass-card">
+          <div class="row"><span class="h3">第二步 · 扫描手环</span><span class="badge b-wait" id="pickedBadge">未选患者</span></div>
+          <div class="text-sub" id="pickedTip" style="margin-top:4px;">请先在上方选择患者</div>
+          <div class="scan-frame" id="scanFrame">
+            <div class="corner sc1"></div><div class="corner sc2"></div><div class="corner sc3"></div><div class="corner sc4"></div>
+            <div class="scan-line"></div>
+            <video id="scanVideo" autoplay muted playsinline></video>
+            <div class="placeholder" id="scanPlaceholder"><span style="font-size:32px;">📷</span>正在准备相机…</div>
+          </div>
+          <div class="scan-err" id="scanErr"></div>
+          <div class="btn-row"><button class="btn btn-primary" id="scanBtn" onclick="startCamera()">启动扫码</button></div>
+          <div class="btn-row" style="margin-top:9px;">
+            <button class="btn btn-ghost" onclick="document.getElementById('photoInput').click()">拍照片识别</button>
+            <input type="file" id="photoInput" accept="image/*" capture="environment" style="display:none;" onchange="decodePhoto(this)">
+          </div>
+        </div>
+        <div class="glass-card">
+          <div class="h3">二维码无法识别？</div>
+          <div class="text-sub" style="margin-top:4px;">输入手环表带背面的编号，同样可以完成绑定。</div>
+          <div class="btn-row" style="margin-top:12px;">
+            <input class="form-input" id="manualBand" placeholder="手环编号，如 A025" style="flex:1;">
+            <button class="btn btn-primary btn-sm" onclick="manualBind()">确定</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="scanStage3" style="display:none;text-align:center;padding-top:36px;">
+        <div style="font-size:56px;">✅</div>
+        <div class="h2" style="margin-top:10px;">手环已发放</div>
+        <div class="text-sub" style="margin-top:10px;line-height:2;" id="bindSuccessTxt"></div>
+        <div class="btn-row" style="margin-top:18px;">
+          <button class="btn btn-ghost" onclick="resetScan()">下一位</button>
+          <button class="btn btn-primary" onclick="gotoTab('patients','候诊中')">查看候诊队列</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 检查 -->
+    <div class="page" id="page-exams">
+      <div class="glass-card">
+        <div class="h3">推送检查引导</div>
+        <div class="text-sub" style="margin-top:4px;">分步动作指令逐条推送到手环，配合震动节奏引导患者配合检查</div>
+        <div class="form-row" style="margin-top:12px;"><label class="form-label">选择患者</label>
+          <select class="form-select" id="examPatient" onchange="renderExamPreview()"></select></div>
+      </div>
+      <div id="examTemplates"></div>
+      <div id="examPreviewWrap" style="display:none;">
+        <div class="glass-card">
+          <div class="row"><span class="h3" id="examPreviewTitle">引导步骤预览</span><span class="badge b-exam" id="examPreviewBadge"></span></div>
+          <div style="margin-top:8px;" id="examPreviewSteps"></div>
+          <div class="btn-row" style="margin-top:12px;"><button class="btn btn-primary" onclick="pushExam()">📲 推送到手环</button></div>
+        </div>
+      </div>
+      <div class="h3" style="padding:8px 4px;">进行中的检查</div>
+      <div id="ongoingExams"></div>
+    </div>
+
+    <!-- 服务 -->
+    <div class="page" id="page-sos">
+      <div class="glass-card" style="display:flex;align-items:center;gap:11px;">
+        <div style="font-size:27px;">🆘</div>
+        <div style="flex:1;"><div class="h3">求助与服务中心</div>
+          <div class="text-sub">患者按手环侧键求助、呼叫手语翻译，会实时出现在这里</div></div>
+      </div>
+      <div id="sosList"></div>
+    </div>
+
+  </div>
+
+  <div class="tab-bar">
+    <div class="tab-item active" data-tab="dash" onclick="switchTab('dash',this)"><span class="icon">📊</span><span>工作台</span></div>
+    <div class="tab-item" data-tab="patients" onclick="switchTab('patients',this)"><span class="icon">👥</span><span>患者</span></div>
+    <div class="tab-scan" onclick="switchTab('scan',this)">
+      <div style="display:flex;flex-direction:column;align-items:center;"><div class="scan-fab">📷</div><div class="scan-lbl">扫码绑定</div></div>
+    </div>
+    <div class="tab-item" data-tab="exams" onclick="switchTab('exams',this)"><span class="icon">🩻</span><span>检查</span></div>
+    <div class="tab-item" data-tab="sos" onclick="switchTab('sos',this)"><span class="icon">🆘</span><span>服务</span><span class="red-dot" id="sosTabDot"></span></div>
+  </div>
+
+  <div class="overlay" id="patientOverlay">
+    <div class="sheet">
+      <div class="sheet-grab"></div>
+      <div class="close-x" onclick="closeSheet('patientOverlay')">✕</div>
+      <div class="sheet-title" id="pdTitle">患者详情</div>
+      <span class="text-sub" id="pdSub"></span>
+      <div id="pdBody"></div>
+    </div>
+  </div>
+
+  <div class="overlay" id="settingsOverlay">
+    <div class="sheet">
+      <div class="sheet-grab"></div>
+      <div class="close-x" onclick="closeSheet('settingsOverlay')">✕</div>
+      <div class="sheet-title">设置</div>
+      <div class="glass-card" style="margin-top:12px;">
+        <div class="list-item"><span>护士</span><span class="v" id="setNurse">—</span></div>
+        <div class="list-item"><span>分诊台</span><span class="v" id="setDesk">—</span></div>
+        <div class="list-item"><span>退出登录</span><button class="btn btn-ghost btn-sm" onclick="logout()">退出</button></div>
+      </div>
+      <div class="glass-card">
+        <div class="list-item"><span>叫号语音播报</span><div class="toggle on" id="tgVoice" onclick="tgl(this,'voice')"></div></div>
+        <div class="list-item"><span>求助震动提醒</span><div class="toggle on" id="tgVibrate" onclick="tgl(this,'vibrate')"></div></div>
+      </div>
+      <div class="glass-card">
+        <div class="h3">患者设备</div>
+        <div class="text-sub" style="margin-top:6px;" id="bandPoolTxt"></div>
+        <div class="list-item" style="margin-top:8px;"><span>📿 手环端（细长屏）</span>
+          <span style="display:flex;gap:6px;">
+            <button class="btn btn-ghost btn-sm" onclick="copyBandUrl()">复制</button>
+            <button class="btn btn-primary btn-sm" onclick="openBandUrl()">打开</button>
+          </span></div>
+        <div class="text-sub" id="bandUrlTxt" style="word-break:break-all;color:var(--primary);font-weight:800;"></div>
+        <div class="list-item" style="margin-top:8px;"><span>⌚ 手表端（方屏）</span>
+          <span style="display:flex;gap:6px;">
+            <button class="btn btn-ghost btn-sm" onclick="copyWatchUrl()">复制</button>
+            <button class="btn btn-primary btn-sm" onclick="openWatchUrl()">打开</button>
+          </span></div>
+        <div class="text-sub" id="watchUrlTxt" style="word-break:break-all;color:var(--primary);font-weight:800;"></div>
+        <div class="ver-tag" id="verTag">版本 v4.0</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay" id="medOverlay">
+    <div class="sheet">
+      <div class="sheet-grab"></div>
+      <div class="close-x" onclick="closeSheet('medOverlay')">✕</div>
+      <div class="sheet-title">推送取药提醒</div>
+      <div class="glass-card" style="margin-top:12px;">
+        <div class="form-row"><label class="form-label">药房窗口</label>
+          <select class="form-select" id="medWin"><option>药房 1 号窗口</option><option selected>药房 3 号窗口</option><option>药房 5 号窗口</option></select></div>
+        <div id="medRows"></div>
+        <button class="btn btn-ghost btn-sm" onclick="addMedRow()" style="margin-top:4px;">＋ 添加一种药</button>
+      </div>
+      <button class="btn btn-primary" onclick="pushMed()">📲 推送到手环</button>
+    </div>
+  </div>
+
+  <div class="overlay" id="loginOverlay">
+    <div class="sheet">
+      <div class="sheet-grab"></div>
+      <div style="text-align:center;padding:8px 0 2px;">
+        <div style="font-size:40px;">🏥</div>
+        <div class="h2" style="margin-top:6px;">分诊工作台</div>
+        <div class="text-sub" style="margin-top:4px;">院内工作账号 · 无需注册（与微信 / WorkBuddy 账号无关）</div>
+      </div>
+      <div class="glass-card" style="margin-top:14px;">
+        <div class="form-row"><label class="form-label">护士工号</label>
+          <input class="form-input" id="loginNo" placeholder="如 N2031（可随意填写）" autocomplete="off"></div>
+        <div class="form-row"><label class="form-label">姓名</label>
+          <input class="form-input" id="loginName" placeholder="请输入姓名" autocomplete="off"></div>
+        <div class="form-row"><label class="form-label">所在分诊台</label>
+          <select class="form-select" id="loginDesk">
+            <option>门诊一楼 分诊台 A</option>
+            <option>门诊二楼 分诊台 B</option>
+            <option>耳鼻喉科 分诊台</option>
+            <option>骨科 分诊台</option>
+          </select></div>
+        <button class="btn btn-primary" onclick="doLogin()">登录</button>
+        <button class="btn btn-ghost" onclick="guestLogin()" style="margin-top:9px;">直接进入（免登录体验）</button>
+        <div class="text-sub" style="margin-top:10px;text-align:center;">工号会保存在本机，下次打开自动进入</div>
+        <div class="ver-tag" id="loginVer">分诊工作台 v4.0</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+</div>
+
+<script>
+/* ================= 基础 ================= */
+const $=s=>document.querySelector(s),$$=s=>document.querySelectorAll(s);
+const COLORS=['#1F6FE0','#0FA3A0','#E8961F','#6E56D8','#F4574C','#3E9BC9','#1557B8'];
+const DEPT_ROOMS={'耳鼻喉科':'3 诊室','骨科':'5 诊室','消化内科':'2 诊室','心内科':'6 诊室',
+  '呼吸内科':'1 诊室','妇产科':'4 诊室','眼科':'7 诊室','儿科':'8 诊室','神经内科':'9 诊室'};
+const EXAM_TEMPLATES=[
+  {id:'ct',name:'CT 平扫',icon:'🫁',desc:'约 5 分钟',
+   steps:[{t:'吸气',d:'跟随震动，慢慢吸气',i:'🫁'},{t:'屏住',d:'保持不动，持续震动',i:'⏸️'},{t:'可以呼吸',d:'扫描完成，请放松',i:'✅'}]},
+  {id:'cte',name:'CT 增强',icon:'💉',desc:'需留置针，约 15 分钟',
+   steps:[{t:'放松手臂',d:'护士正在建立留置针',i:'💉'},{t:'深吸气',d:'跟随震动，慢慢深吸气',i:'🫁'},{t:'屏住 20 秒',d:'造影剂注入中，请勿动',i:'⏸️'},{t:'正常呼吸',d:'可以呼吸了，请放松',i:'🌬️'},{t:'按压止血',d:'检查完成，请按压针口 5 分钟',i:'✅'}]},
+  {id:'gj',name:'胃镜',icon:'🔬',desc:'左侧卧位，约 10 分钟',
+   steps:[{t:'左侧躺下',d:'请按指示左侧卧于检查床',i:'🛏️'},{t:'咬住咬嘴',d:'轻轻咬住，防止咬伤',i:'👄'},{t:'深呼吸放松',d:'跟随震动节奏，慢慢深呼吸',i:'🌬️'},{t:'吞咽配合',d:'镜子进入时请做吞咽动作',i:'👅'},{t:'检查完成',d:'请吐出口垫，休息片刻',i:'✅'}]},
+  {id:'xray',name:'X 光胸片',icon:'🩻',desc:'站立位，约 3 分钟',
+   steps:[{t:'面向平板站立',d:'胸口贴紧检测板',i:'🧍'},{t:'双臂上举',d:'抬起双臂，肘部向前',i:'🙌'},{t:'深吸气',d:'跟随震动，吸满气',i:'🫁'},{t:'屏住',d:'保持不动 3 秒',i:'⏸️'},{t:'检查完成',d:'请放下手臂，可以离开',i:'✅'}]},
+  {id:'bus',name:'腹部 B 超',icon:'📡',desc:'平躺位，约 10 分钟',
+   steps:[{t:'平躺露出腹部',d:'躺平并露出检查部位',i:'🛏️'},{t:'放松配合',d:'医生将按压探头，请放松',i:'💆'},{t:'屏气配合',d:'需要时请跟随震动屏住呼吸',i:'🤫'},{t:'检查完成',d:'请用纸巾擦净耦合剂',i:'✅'}]},
+  {id:'mri',name:'核磁 MRI',icon:'🧲',desc:'约 20 分钟，需静卧',
+   steps:[{t:'取出金属物品',d:'手表、首饰、磁卡请交给家属',i:'💍'},{t:'平躺戴耳机',d:'机器声音较大，请勿紧张',i:'🎧'},{t:'保持不动',d:'持续震动表示检查进行中',i:'🧘'},{t:'分段休息',d:'短暂停顿，可小幅活动',i:'😌'},{t:'检查完成',d:'请缓慢起身，领取报告单',i:'✅'}]},
+];
+
+let DB={patients:[],feed:[],sos:[],rev:0};
+const APP_VER='4.0';
+let netOk=true;
+let settings={voice:true,vibrate:true};
+let nurse={no:'',name:'',desk:'门诊一楼 分诊台 A'};
+let currentFilter='全部',currentExamTpl=null,pickedPatientId=null,medPatientId=null,examSel='';
+let camStream=null,camRaf=null;
+try{const s=JSON.parse(localStorage.getItem('wb_nurse_settings')||'null');if(s)settings=Object.assign(settings,s);}catch(e){}
+try{const n=JSON.parse(localStorage.getItem('wb_nurse_profile')||'null');if(n)nurse=Object.assign(nurse,n);}catch(e){}
+
+/* ================= 服务端通讯 ================= */
+async function api(payload){
+  try{
+    const r=await fetch('/api/action',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(payload)});
+    const d=await r.json();
+    return d;
+  }catch(e){return {code:-1,msg:'网络连接异常，请检查后重试'};}
+}
+let pulling=false;
+function setNet(ok,detail){
+  netOk=ok;
+  const b=$('#netBanner');if(!b)return;
+  if(ok){b.classList.remove('on');return;}
+  const t=$('#netBannerTxt');
+  if(t)t.textContent='连接服务失败'+(detail?'（'+detail+'）':'')+'，请检查网络或更换浏览器';
+  b.classList.add('on');
+}
+async function pull(){
+  if(pulling)return;
+  pulling=true;
+  try{
+    const r=await fetch('/api/nurse',{cache:'no-store'});
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    const d=await r.json();
+    /* 服务端版本更新时自动刷新一次，避免旧缓存 */
+    if(d.ver&&d.ver!==APP_VER){
+      try{localStorage.setItem('wb_seen_ver',d.ver);}catch(e){}
+      location.reload();return;
+    }
+    DB.patients=d.patients||[];DB.feed=d.feed||[];DB.sos=d.sos||[];DB.rev=d.rev||0;
+    setNet(true);
+    renderAll();
+  }catch(e){
+    setNet(false,e&&e.message||'');
+  }finally{pulling=false;}
+}
+function renderAll(){
+  renderDash();renderPatients();renderExams();renderSos();renderReg();
+}
+
+/* ================= 工具 ================= */
+function nowHM(){const d=new Date();return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');}
+let toastTimer;
+function showToast(msg,err){const t=$('#toast');if(!t)return;t.textContent=msg;t.classList.toggle('err',!!err);
+  t.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove('show'),2200);}
+function vibrate(p){if(settings.vibrate&&navigator.vibrate){try{navigator.vibrate(p);}catch(e){}}}
+function speak(text){if(!settings.voice)return;try{const u=new SpeechSynthesisUtterance(text);u.lang='zh-CN';u.rate=.9;
+  speechSynthesis.cancel();speechSynthesis.speak(u);}catch(e){}}
+const BADGE={'待发环':'b-free','候诊中':'b-wait','已叫号':'b-called','就诊中':'b-visit','检查中':'b-exam','已完成':'b-done'};
+function statusBadge(st){return `<span class="badge ${BADGE[st]||'b-done'}">${st}</span>`;}
+function saveSettings(){try{localStorage.setItem('wb_nurse_settings',JSON.stringify(settings));}catch(e){}}
+function parseBandCode(raw){
+  let s=String(raw||'').trim();
+  let m=s.match(/band=([A-Za-z0-9]+)/i);
+  let id=m?m[1]:((s.match(/^WB:([A-Za-z0-9]+)$/i)||[])[1]||s.replace(/^WB:/i,''));
+  id=String(id||'').toUpperCase();
+  return /^A\d{2,4}$/.test(id)?id:null;
+}
+function tick(){const d=new Date();const el=$('#clock');
+  if(el)el.textContent=String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');}
+setInterval(tick,1000);tick();
+if(navigator.getBattery){navigator.getBattery().then(b=>{
+  const u=()=>{const l=$('#battLevel'),t=$('#battText');if(!l)return;
+    l.style.width=Math.round(b.level*100)+'%';t.textContent=Math.round(b.level*100)+'%';
+    l.style.background=b.level<.2?'var(--danger)':(b.level<.5?'var(--warn)':'var(--success)');};
+  u();b.addEventListener('levelchange',u);}).catch(()=>{});}
+
+/* ================= Tab ================= */
+const TAB_META={dash:['工作台','手环发放与叫号'],patients:['患者管理','今日全部患者 · 实时状态'],
+  scan:['发放手环','选择患者 → 扫描手环'],exams:['检查引导','分步动作推送'],sos:['求助与服务','手环求助 / 手语翻译']};
+function switchTab(tab,el){
+  $$('.page').forEach(p=>p.classList.remove('active'));
+  const pg=$('#page-'+tab);if(pg)pg.classList.add('active');
+  $$('.tab-item').forEach(t=>t.classList.remove('active'));
+  if(el&&el.classList)el.classList.add('active');
+  switchTabMeta(TAB_META[tab][0],TAB_META[tab][1]);
+  if(tab==='dash')renderDash();
+  if(tab==='patients')renderPatients();
+  if(tab==='scan'){renderReg();setTimeout(()=>{if(!camStream)startCamera();},250);}
+  if(tab==='exams')renderExams();
+  if(tab==='sos')renderSos();
+  if(tab!=='scan')stopCamera();
+}
+function switchTabMeta(t,s){$('#pageTitle').textContent=t;$('#pageSub').textContent=s;}
+function gotoTab(tab,filter){
+  if(filter){currentFilter=filter;$$('#filterChips .chip').forEach(c=>c.classList.toggle('on',c.dataset.f===filter));}
+  switchTab(tab,$$('.tab-item[data-tab="'+tab+'"]')[0]);
+}
+
+/* ================= 工作台 ================= */
+function renderDash(){
+  const ps=DB.patients;
+  const active=ps.filter(p=>p.status!=='已完成');
+  $('#stWait').textContent=active.filter(p=>p.status==='候诊中').length;
+  $('#stVisit').textContent=active.filter(p=>['已叫号','就诊中'].includes(p.status)).length;
+  $('#stExam').textContent=active.filter(p=>p.status==='检查中').length;
+  const nSos=DB.sos.filter(a=>a.status==='active').length;
+  $('#stSos').textContent=nSos;
+  $('#statSos').classList.toggle('alerting',nSos>0);
+  $('#sosTabDot').classList.toggle('on',nSos>0);
+  $('#sosGearDot').classList.toggle('on',nSos>0);
+
+  const wearing=active.filter(p=>p.bandActive).length;
+  const freeCount=30-wearing;
+  const pf=$('#bandPoolTxt');
+  if(pf)pf.textContent='佩戴中 '+wearing+' 个 · 空闲 '+freeCount+' 个 · 今日已回收 '+ps.filter(p=>p.status==='已完成').length+' 个';
+
+  const calling=ps.find(p=>p.status==='已叫号');
+  if(calling){
+    $('#consoleRoom').textContent=calling.room+' · '+calling.dept;
+    $('#consoleBadge').textContent='叫号中';
+    $('#consoleName').textContent=calling.no+' '+calling.name;
+    $('#consoleSub').textContent='等待患者在手环上确认';
+  }else{
+    const next=active.find(p=>p.status==='候诊中');
+    if(next){$('#consoleRoom').textContent=next.room+' · '+next.dept;$('#consoleBadge').textContent='待呼叫';
+      $('#consoleName').textContent=next.no+' '+next.name;$('#consoleSub').textContent='下一位候诊患者，点击呼叫';}
+    else{
+      const pending=ps.filter(p=>p.status==='待发环').length;
+      $('#consoleRoom').textContent='—';$('#consoleName').textContent='候诊队列为空';
+      $('#consoleSub').textContent=pending?('还有 '+pending+' 位患者未领手环，请先发放'):'全部患者已就诊完成';
+    }
+  }
+  $('#feedCount').textContent=DB.feed.length+' 条';
+  $('#feedList').innerHTML=DB.feed.slice(0,8).map(f=>
+    `<div class="feed-item"><span class="feed-dot" style="background:${f.color||'#1F6FE0'}"></span><span>${f.label}</span><span class="f-time">${f.t}</span></div>`
+  ).join('')||'<div class="empty" style="padding:16px 0;">暂无动态</div>';
+  const un=ps.filter(p=>p.status==='已叫号');
+  $('#todoList').innerHTML=un.length?un.map(p=>
+    `<div class="row" style="padding:8px 0;border-bottom:1.4px dashed #E1EEF8;">
+      <span style="font-size:12.5px;font-weight:700;">⏰ <b>${p.no} ${p.name}</b> 叫号未确认</span>
+      <button class="btn btn-warn btn-sm" onclick="recallPatient(${p.id})">再次呼叫</button></div>`).join('')
+    :'<div class="text-sub" style="padding:4px 0;">暂无待办</div>';
+}
+
+/* ================= 患者 ================= */
+function setFilter(el){$$('#filterChips .chip').forEach(c=>c.classList.remove('on'));el.classList.add('on');
+  currentFilter=el.dataset.f;renderPatients();}
+function renderPatients(){
+  const box=$('#patientList');if(!box)return;
+  const kw=($('#searchInput').value||'').trim();
+  let list=DB.patients.slice();
+  if(currentFilter!=='全部')list=list.filter(p=>p.status===currentFilter);
+  if(kw)list=list.filter(p=>(p.name+p.no+(p.band||'')).includes(kw));
+  const order={'已叫号':0,'候诊中':1,'待发环':2,'检查中':3,'就诊中':4,'已完成':5};
+  list.sort((a,b)=>(order[a.status]-order[b.status])||(a.id-b.id));
+  box.innerHTML=list.length?list.map(p=>`
+    <div class="patient-card" onclick="openPatient(${p.id})">
+      <div class="avatar" style="background:${COLORS[p.id%COLORS.length]}">${p.name[0]}</div>
+      <div style="flex:1;min-width:0;">
+        <div class="p-name">${p.no} · ${p.name} <span class="text-sub">${p.gender} ${p.age}岁</span></div>
+        <div class="p-meta">${p.dept} · ${p.room}${p.bandActive?' · 手环 '+p.band:''}</div>
+        ${p.need!=='无'?`<div class="p-tag">⚠ 特殊需求：${p.need}</div>`:''}
+      </div>
+      <div class="p-right">${statusBadge(p.status)}<div class="p-time">${p.registeredAt} 挂号</div></div>
+    </div>`).join(''):'<div class="empty"><div class="e-icon">🔍</div>没有符合条件的患者</div>';
+}
+function openPatient(id){
+  const p=DB.patients.find(x=>x.id===id);if(!p)return;
+  $('#pdTitle').textContent=p.no+' · '+p.name;
+  $('#pdSub').textContent=`${p.gender} · ${p.age}岁 · ${p.dept} · ${p.room}`;
+  const acts=[];
+  if(p.status==='待发环')acts.push(`<button class="btn btn-primary" onclick="closeSheet('patientOverlay');gotoTab('scan');pickReg(${p.id})">去发放手环</button>`);
+  if(p.status==='候诊中')acts.push(`<button class="btn btn-primary" onclick="doCall(${p.id});closeSheet('patientOverlay')">一键叫号</button>`);
+  if(p.status==='已叫号')acts.push(`<div class="btn-row"><button class="btn btn-warn" onclick="recallPatient(${p.id})" style="flex:1">再次呼叫</button><button class="btn btn-primary" onclick="confirmVisit(${p.id})" style="flex:1">确认进入诊室</button></div>`);
+  if(p.status==='就诊中')acts.push(`<div class="btn-row"><button class="btn btn-warn" onclick="openMed(${p.id})" style="flex:1">取药提醒</button><button class="btn btn-success" onclick="finishVisit(${p.id})" style="flex:1">就诊完成</button></div>`);
+  if(p.status==='检查中')acts.push(`<button class="btn btn-success" onclick="finishVisit(${p.id})">全部完成</button>`);
+  if(p.bandActive)acts.push(`<button class="btn btn-danger" onclick="unbindBand(${p.id})">解绑并回收手环</button>`);
+  $('#pdBody').innerHTML=`
+    <div class="glass-card" style="margin-top:12px;">
+      <div class="row"><span class="h3">就诊信息</span>${statusBadge(p.status)}</div>
+      <div class="text-sub" style="margin-top:8px;line-height:2;">
+        候诊序号：<b>${p.no}</b>　挂号时间：${p.registeredAt}<br>
+        手环：${p.bandActive?'<b style="color:var(--primary)">'+p.band+'</b>':'未领取'}<br>
+        特殊需求：${p.need==='无'?'无':p.need}${p.note?'　备注：'+p.note:''}
+      </div>
+    </div>
+    <div class="glass-card"><div class="h3">就诊流程</div>
+      <div class="timeline">${p.events.slice().reverse().slice(0,12).map((e,i)=>`
+        <div class="tl-item"><div class="tl-left"><div class="tl-dot ${i===0?'':'gray'}"></div></div>
+        <div class="tl-body"><div class="tl-txt">${e.label}</div><div class="tl-time">${e.t}</div></div></div>`).join('')}</div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:10px;">${acts.join('')}</div>`;
+  $('#patientOverlay').classList.add('show');
+}
+
+/* ================= 业务动作 ================= */
+async function doCall(id){
+  const p=DB.patients.find(x=>x.id===id);if(!p)return;
+  const r=await api({type:'call',patientId:id});
+  if(r.code){showToast(r.msg||'操作失败',true);return;}
+  vibrate([200,100,200]);
+  speak('请'+p.no+'号，'+p.name+'，到'+p.room+'就诊');
+  showToast('已叫号：'+p.name);
+  pull();renderPatients();
+}
+function callNext(){
+  const next=DB.patients.find(p=>p.status==='候诊中');
+  if(!next){showToast('候诊队列为空',true);return;}
+  doCall(next.id);
+}
+function recallCurrent(){
+  const p=DB.patients.find(x=>x.status==='已叫号');
+  if(!p){showToast('当前没有叫号中的患者',true);return;}
+  recallPatient(p.id);
+}
+async function recallPatient(id){
+  const p=DB.patients.find(x=>x.id===id);if(!p)return;
+  const r=await api({type:'call',patientId:id});
+  if(r.code){showToast(r.msg||'操作失败',true);return;}
+  vibrate(300);speak('再次提醒，请'+p.no+'号，'+p.name+'，到'+p.room+'就诊');
+  showToast('已重复呼叫，手环再次提醒');
+  pull();
+}
+async function confirmVisit(id){
+  const r=await api({type:'visit',patientId:id});
+  if(r.code){showToast(r.msg||'操作失败',true);return;}
+  closeSheet('patientOverlay');showToast('已标记为就诊中');pull();
+}
+async function finishVisit(id){
+  const r=await api({type:'finish',patientId:id});
+  if(r.code){showToast(r.msg||'操作失败',true);return;}
+  closeSheet('patientOverlay');showToast('就诊完成，手环已回收');pull();
+}
+async function unbindBand(id){
+  const p=DB.patients.find(x=>x.id===id);if(!p)return;
+  if(!confirm('确认回收手环 '+(p.band||'')+'？手环将回到待发放状态。'))return;
+  const r=await api({type:'unbind',patientId:id});
+  if(r.code){showToast(r.msg||'操作失败',true);return;}
+  closeSheet('patientOverlay');showToast('手环已回收');pull();
+}
+function closeSheet(id){const el=$('#'+id);if(el)el.classList.remove('show');}
+
+/* ================= 发放手环 ================= */
+function renderReg(){
+  const box=$('#regList');if(!box)return;
+  const kw=($('#regSearch')&&$('#regSearch').value||'').trim();
+  const pending=DB.patients.filter(p=>p.status==='待发环');
+  if($('#regCount'))$('#regCount').textContent='待发环 '+pending.length+' 人';
+  let list=pending;
+  if(kw)list=list.filter(p=>(p.name+p.no).includes(kw));
+  let emptyTxt;
+  if(!DB.patients.length)emptyTxt=netOk?'正在加载患者名单…':'无法连接服务，请检查网络后点上方「重试」';
+  else if(!pending.length)emptyTxt='今日患者均已领取手环';
+  else emptyTxt='没有匹配的患者';
+  box.innerHTML=list.length?list.map(p=>`
+    <div class="reg-item ${pickedPatientId===p.id?'on':''}" onclick="pickReg(${p.id})">
+      <div class="avatar" style="background:${COLORS[p.id%COLORS.length]}">${p.name[0]}</div>
+      <div style="flex:1;min-width:0;">
+        <div class="p-name">${p.name} <span class="text-sub">${p.gender} ${p.age}岁</span></div>
+        <div class="p-meta">${p.no} · ${p.dept} · ${p.room}</div>
+      </div>
+      ${p.need!=='无'?`<span class="p-tag" style="margin:0 6px 0 0;">${p.need}</span>`:''}
+      <span class="reg-pick">${pickedPatientId===p.id?'已选':'选择'}</span>
+    </div>`).join(''):'<div class="empty" style="padding:18px 0;">'+emptyTxt+'</div>';
+  const picked=DB.patients.find(p=>p.id===pickedPatientId);
+  const badge=$('#pickedBadge'),tip=$('#pickedTip');
+  if(badge){badge.textContent=picked?'已选患者':'未选患者';badge.className='badge '+(picked?'b-visit':'b-wait');}
+  if(tip){tip.textContent=picked?('将把手环绑定给 '+picked.no+' '+picked.name+'（'+picked.dept+' '+picked.room+'）'):'请先在上方选择患者';}
+}
+function pickReg(id){
+  pickedPatientId=id;renderReg();
+  const p=DB.patients.find(x=>x.id===id);
+  if(p)showToast('已选择 '+p.name+'，请扫描手环');
+  if(!camStream)startCamera();
+}
+function resetScan(){
+  pickedPatientId=null;
+  const s1=$('#scanStage1'),s3=$('#scanStage3');
+  if(s1)s1.style.display='block';
+  if(s3)s3.style.display='none';
+  switchTabMeta('发放手环','选择患者 → 扫描手环');
+  renderReg();
+}
+function foundBand(bandId){
+  if(!pickedPatientId){showToast('请先在上方选择患者',true);return;}
+  bindNow(bandId);
+}
+async function bindNow(bandId){
+  const p=DB.patients.find(x=>x.id===pickedPatientId);
+  if(!p)return;
+  const r=await api({type:'bind',band:bandId,patientId:pickedPatientId});
+  if(r.code){showToast(r.msg||'绑定失败',true);return;}
+  stopCamera();vibrate([100,50,100]);
+  speak('手环已绑定，请'+p.name+'到'+p.room+'候诊');
+  $('#scanStage1').style.display='none';
+  $('#scanStage3').style.display='block';
+  $('#bindSuccessTxt').innerHTML=
+    `<b>${p.no} ${p.name}</b>　${p.gender} ${p.age}岁<br>
+     ${p.dept} · ${p.room}<br>
+     手环 <b style="color:var(--primary)">${bandId}</b> 已同步个人信息`;
+  switchTabMeta('发放成功','手环已激活');
+  pickedPatientId=null;
+  pull();
+}
+function manualBind(){
+  const v=($('#manualBand').value||'').trim().toUpperCase().replace(/^手环\s*/,'');
+  if(!/^A\d{2,4}$/.test(v)){showToast('请输入正确编号，如 A025',true);return;}
+  foundBand(v);
+}
+
+/* ================= 相机扫码 ================= */
+async function startCamera(){
+  const errEl=$('#scanErr');if(errEl)errEl.style.display='none';
+  if(typeof jsQR==='undefined'){showScanErr('识别组件未加载，请检查网络后重试。也可以输入手环编号完成绑定。');return;}
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){
+    showScanErr('当前浏览器无法调用相机，请改用「拍照片识别」，或输入手环表带编号完成绑定。');return;}
+  try{
+    $('#scanBtn').disabled=true;$('#scanBtn').textContent='正在启动…';
+    camStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment',width:{ideal:720},height:{ideal:720}}});
+    const video=$('#scanVideo');video.srcObject=camStream;await video.play();
+    const ph=$('#scanPlaceholder');if(ph)ph.style.display='none';
+    const sf=$('#scanFrame');if(sf)sf.classList.add('scanning');
+    $('#scanBtn').disabled=false;$('#scanBtn').textContent='停止扫码';
+    $('#scanBtn').onclick=stopCamera;
+    vibrate(60);scanLoop();
+  }catch(e){
+    const msg=e.name==='NotAllowedError'
+      ? '相机权限未开启。请在浏览器设置中允许使用相机后重试；也可以点「拍照片识别」或输入手环编号绑定。'
+      : (e.name==='NotFoundError'?'未检测到摄像头，请改用「拍照片识别」或输入手环编号。':'相机启动失败，请改用「拍照片识别」或输入手环编号。');
+    showScanErr(msg);
+    $('#scanBtn').disabled=false;$('#scanBtn').textContent='启动扫码';
+    $('#scanBtn').onclick=startCamera;
+  }
+}
+function showScanErr(msg){const e=$('#scanErr');if(!e)return;e.textContent=msg;e.style.display='block';}
+function stopCamera(){
+  if(camRaf)cancelAnimationFrame(camRaf);camRaf=null;
+  if(camStream){camStream.getTracks().forEach(t=>t.stop());camStream=null;}
+  const v=$('#scanVideo');if(v)v.srcObject=null;
+  const f=$('#scanFrame');if(f)f.classList.remove('scanning');
+  const p=$('#scanPlaceholder');
+  if(p){p.style.display='flex';p.innerHTML='<span style="font-size:32px;">📷</span>点击下方启动扫码';}
+  const b=$('#scanBtn');if(b){b.disabled=false;b.textContent='启动扫码';b.onclick=startCamera;}
+}
+function scanLoop(){
+  if(!camStream)return;
+  const video=$('#scanVideo'),canvas=document.createElement('canvas');
+  const step=()=>{
+    if(!camStream)return;
+    if(video.readyState===video.HAVE_ENOUGH_DATA){
+      canvas.width=video.videoWidth;canvas.height=video.videoHeight;
+      const ctx=canvas.getContext('2d',{willReadFrequently:true});
+      ctx.drawImage(video,0,0,canvas.width,canvas.height);
+      const img=ctx.getImageData(0,0,canvas.width,canvas.height);
+      let code=null;
+      try{code=jsQR(img.data,canvas.width,canvas.height,{inversionAttempts:'dontInvert'});}catch(e){}
+      if(code&&code.data){
+        const bandId=parseBandCode(code.data);
+        if(bandId){foundBand(bandId);return;}
+      }
+    }
+    camRaf=requestAnimationFrame(step);
+  };
+  camRaf=requestAnimationFrame(step);
+}
+function decodePhoto(input){
+  const file=input.files&&input.files[0];
+  input.value='';
+  if(!file)return;
+  if(typeof jsQR==='undefined'){showToast('识别组件未加载，请联网后重试',true);return;}
+  const img=new Image(),url=URL.createObjectURL(file);
+  img.onload=()=>{
+    try{
+      const max=1000,s=Math.min(1,max/Math.max(img.width,img.height));
+      const c=document.createElement('canvas');
+      c.width=Math.round(img.width*s);c.height=Math.round(img.height*s);
+      const ctx=c.getContext('2d',{willReadFrequently:true});
+      ctx.drawImage(img,0,0,c.width,c.height);
+      const d=ctx.getImageData(0,0,c.width,c.height);
+      let code=null;
+      try{code=jsQR(d.data,c.width,c.height,{inversionAttempts:'attemptBoth'});}catch(e){}
+      const bandId=code&&code.data?parseBandCode(code.data):null;
+      if(bandId){foundBand(bandId);return;}
+      showToast('没认出二维码，请正对手环屏幕重新拍一张',true);
+    }finally{URL.revokeObjectURL(url);}
+  };
+  img.onerror=()=>{URL.revokeObjectURL(url);showToast('照片读取失败，请重试',true);};
+  img.src=url;
+}
+
+/* ================= 检查引导 ================= */
+function renderExams(){
+  const sel=$('#examPatient');if(!sel)return;
+  const opts=DB.patients.filter(p=>['候诊中','已叫号','就诊中'].includes(p.status)&&p.bandActive);
+  const keep=sel.value||examSel;
+  sel.innerHTML=opts.length?opts.map(p=>`<option value="${p.id}">${p.no} ${p.name} · ${p.dept}</option>`).join('')
+    :'<option value="">暂无可推送的患者</option>';
+  if(keep&&opts.some(p=>String(p.id)===String(keep)))sel.value=keep;
+
+  $('#examTemplates').innerHTML=EXAM_TEMPLATES.map(t=>`
+    <div class="exam-template ${currentExamTpl&&currentExamTpl.id===t.id?'on':''}" onclick="pickExamTpl('${t.id}')">
+      <div class="exam-icon">${t.icon}</div>
+      <div style="flex:1;"><div class="h3">${t.name} <span class="text-sub" style="font-weight:700;">· ${t.desc}</span></div>
+      <div class="exam-steps-preview">${t.steps.map(s=>s.t).join(' → ')}</div></div><span style="color:#9EC6E0;">›</span>
+    </div>`).join('');
+  renderExamPreview();
+  const ongoing=DB.patients.filter(p=>p.status==='检查中'&&p.examName);
+  $('#ongoingExams').innerHTML=ongoing.length?ongoing.map(p=>{
+    const steps=p.examSteps||[];
+    return `<div class="glass-card">
+      <div class="row"><span class="h3">${p.examName} · ${p.no} ${p.name}</span>${statusBadge(p.status)}</div>
+      <div class="text-sub" style="margin-top:4px;">手环 ${p.band} · 第 ${Math.min(p.examStep+1,steps.length)}/${steps.length} 步</div>
+      <div style="margin-top:8px;">${steps.map((s,i)=>`<div class="step-item ${i<p.examStep?'done':(i===p.examStep?'current':'')}"><span class="s-dot"></span><span>${s.t} — ${s.d}</span></div>`).join('')}</div>
+      <div class="btn-row" style="margin-top:12px;">
+        <button class="btn btn-primary btn-sm" style="flex:1" onclick="examNext(${p.id})">推送下一步</button>
+        <button class="btn btn-success btn-sm" style="flex:1" onclick="examDone(${p.id})">检查完成</button>
+      </div></div>`;
+  }).join(''):'<div class="empty"><div class="e-icon">🩻</div>暂无进行中的检查</div>';
+}
+function pickExamTpl(id){currentExamTpl=EXAM_TEMPLATES.find(t=>t.id===id);renderExams();}
+function renderExamPreview(){
+  const w=$('#examPreviewWrap'),sel=$('#examPatient');
+  if(!w||!sel)return;
+  if(!currentExamTpl||!sel.value){w.style.display='none';return;}
+  const p=DB.patients.find(x=>String(x.id)===String(sel.value));
+  if(!p){w.style.display='none';return;}
+  $('#examPreviewTitle').textContent=currentExamTpl.name+' → '+p.name;
+  $('#examPreviewBadge').textContent='共 '+currentExamTpl.steps.length+' 步';
+  $('#examPreviewSteps').innerHTML=currentExamTpl.steps.map((s,i)=>
+    `<div class="step-item"><span class="s-dot" style="background:var(--primary);border-color:var(--primary);"></span><span>第${i+1}步 <b>${s.t}</b> — ${s.d}</span></div>`).join('');
+  w.style.display='block';
+}
+async function pushExam(){
+  const sel=$('#examPatient');
+  if(!sel||!sel.value){showToast('请先选择患者',true);return;}
+  if(!currentExamTpl){showToast('请先选择检查项目',true);return;}
+  examSel=sel.value;
+  const p=DB.patients.find(x=>String(x.id)===String(sel.value));
+  const r=await api({type:'exam',patientId:p.id,examName:currentExamTpl.name,steps:currentExamTpl.steps});
+  if(r.code){showToast(r.msg||'推送失败',true);return;}
+  vibrate([150,80,150]);
+  speak(p.name+'，即将开始'+currentExamTpl.name+'检查，请按手环提示配合');
+  showToast('已推送至手环 '+p.band);
+  pull();
+}
+async function examNext(id){
+  const r=await api({type:'examNext',patientId:id});
+  if(r.code){showToast(r.msg||'操作失败',true);return;}
+  showToast('已推送下一步');pull();
+}
+async function examDone(id){
+  const r=await api({type:'examDone',patientId:id});
+  if(r.code){showToast(r.msg||'操作失败',true);return;}
+  showToast('检查完成，患者返回诊室');pull();
+}
+
+/* ================= 取药 ================= */
+function openMed(id){
+  medPatientId=id;
+  $('#medRows').innerHTML='';addMedRow();addMedRow();
+  $('#medOverlay').classList.add('show');
+}
+function addMedRow(){
+  const div=document.createElement('div');
+  div.className='form-row';
+  div.innerHTML=`<div class="btn-row"><input class="form-input med-name" placeholder="药名，如：阿莫西林" style="flex:1.3;">
+    <input class="form-input med-usage" placeholder="用法：每日3次·每次1片·饭后" style="flex:2;"></div>`;
+  $('#medRows').appendChild(div);
+}
+async function pushMed(){
+  const p=DB.patients.find(x=>x.id===medPatientId);if(!p)return;
+  const meds=[...$$('#medRows .form-row')].map(r=>{
+    const n=r.querySelector('.med-name').value.trim(),u=r.querySelector('.med-usage').value.trim();
+    return n?{i:'💊',n,u:u||'请遵医嘱'}:null;
+  }).filter(Boolean);
+  if(!meds.length){showToast('请至少填写一种药',true);return;}
+  const win=$('#medWin').value;
+  const r=await api({type:'med',patientId:p.id,win,meds});
+  if(r.code){showToast(r.msg||'推送失败',true);return;}
+  speak(p.name+'，请到'+win+'取药');
+  closeSheet('medOverlay');showToast('取药提醒已推送至手环 '+p.band);pull();
+}
+
+/* ================= 求助 ================= */
+function renderSos(){
+  const box=$('#sosList');if(!box)return;
+  const list=DB.sos;
+  box.innerHTML=list.length?list.map(a=>{
+    const cls=a.status==='active'?'':(a.status==='handling'?'handling':'resolved');
+    const badge=a.status==='active'?'<span class="badge" style="background:var(--danger);color:#fff;border-color:var(--danger);">待响应</span>'
+      :a.status==='handling'?'<span class="badge b-called">处理中</span>':'<span class="badge b-done">已解决</span>';
+    const kind=a.kind==='interpreter'?'<span class="sos-kind k-interp">手语翻译</span>':'';
+    const btns=a.status==='active'
+      ?`<div class="btn-row" style="margin-top:10px;"><button class="btn btn-danger btn-sm" style="flex:1" onclick="sosAct('sosHandle',${a.id})">前往处理</button><button class="btn btn-success btn-sm" style="flex:1" onclick="sosAct('sosResolve',${a.id})">已解决</button></div>`
+      :a.status==='handling'?`<div class="btn-row" style="margin-top:10px;"><button class="btn btn-success btn-sm" style="flex:1" onclick="sosAct('sosResolve',${a.id})">已解决</button></div>`:'';
+    return `<div class="sos-card ${cls}"><div class="row">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div style="font-size:23px;">${a.kind==='interpreter'?'🧏':'🆘'}</div>
+        <div><div class="sos-title">手环 ${a.band} · ${a.patient}${kind}</div>
+        <div class="sos-loc">📍 ${a.loc} · ${a.time}</div></div>
+      </div>${badge}</div>${btns}</div>`;
+  }).join(''):'<div class="empty"><div class="e-icon">🎉</div>暂无求助 / 服务请求</div>';
+}
+async function sosAct(type,id){
+  const r=await api({type,id});
+  if(r.code){showToast(r.msg||'操作失败',true);return;}
+  pull();
+}
+
+/* ================= 设置 / 账号 ================= */
+function tgl(el,key){el.classList.toggle('on');settings[key]=el.classList.contains('on');saveSettings();}
+function openSettings(){
+  applyNurse();
+  const t=$('#bandUrlTxt');if(t)t.textContent=location.origin+'/band/';
+  const t2=$('#watchUrlTxt');if(t2)t2.textContent=location.origin+'/watch/';
+  $('#tgVoice').classList.toggle('on',settings.voice);
+  $('#tgVibrate').classList.toggle('on',settings.vibrate);
+  renderDash();
+  $('#settingsOverlay').classList.add('show');
+}
+function doLogin(){
+  const no=($('#loginNo').value||'').trim(),name=($('#loginName').value||'').trim(),desk=$('#loginDesk').value;
+  if(!no){showToast('请输入工号',true);return;}
+  if(!name){showToast('请输入姓名',true);return;}
+  nurse={no,name,desk};
+  try{localStorage.setItem('wb_nurse_profile',JSON.stringify(nurse));}catch(e){}
+  applyNurse();closeSheet('loginOverlay');showToast('欢迎，'+name);
+}
+function guestLogin(){
+  nurse={no:'GUEST',name:'值班护士',desk:$('#loginDesk').value};
+  try{localStorage.setItem('wb_nurse_profile',JSON.stringify(nurse));}catch(e){}
+  applyNurse();closeSheet('loginOverlay');showToast('已进入工作台（体验模式）');
+}
+function applyNurse(){
+  const d=$('#deskName');if(d)d.textContent=nurse.desk;
+  const n=$('#setNurse');if(n)n.textContent=nurse.name?nurse.name+'（'+nurse.no+'）':'未登录';
+  const s=$('#setDesk');if(s)s.textContent=nurse.desk;
+}
+function logout(){
+  if(!confirm('确认退出登录？'))return;
+  try{localStorage.removeItem('wb_nurse_profile');}catch(e){}
+  nurse={no:'',name:'',desk:'门诊一楼 分诊台 A'};
+  applyNurse();$('#loginOverlay').classList.add('show');
+}
+function openBandUrl(){ location.href = location.origin + '/band/'; }
+function openWatchUrl(){ location.href = location.origin + '/watch/'; }
+function copyWatchUrl(){ copyText(location.origin+'/watch/'); }
+function copyText(u){
+  const ok=()=>showToast('地址已复制');
+  const fb=()=>{
+    const ta=document.createElement('textarea');ta.value=u;ta.style.position='fixed';ta.style.opacity='0';
+    document.body.appendChild(ta);ta.select();
+    try{document.execCommand('copy');ok();}catch(e){showToast('复制失败，请长按地址手动复制',true);}
+    document.body.removeChild(ta);
+  };
+  if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(u).then(ok).catch(fb);}
+  else fb();
+}
+function copyBandUrl(){ copyText(location.origin+'/band/'); }
+
+/* ================= 启动 ================= */
+applyNurse();
+if(!nurse.name)$('#loginOverlay').classList.add('show');
+pull();
+setInterval(pull,2000);
+
+</script>
+</body>
+</html>

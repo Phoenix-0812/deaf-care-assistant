@@ -1,0 +1,6 @@
+{
+  "buildCommand": "",
+  "startCommand": "node server.js",
+  "framework": "nodejs",
+  "outputDirectory": "."
+}

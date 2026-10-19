@@ -1,15 +1,16 @@
-/* 云端状态代理（PieSocket 公共 WebSocket 实时同步，免注册、标准 443 端口）
-   护士端与手表端连接同一个频道，任一设备执行动作后全量状态广播，
-   对端 1 秒内收到并刷新；断线自动重连，心跳 5 秒保证丢消息自愈。
-   断网/WS 不可用时用 localStorage 缓存兜底单机演示。 */
+/* 云端状态代理（EMQX 公共 MQTT Broker，免注册、WSS 标准 443 端口）
+   护士端与手表端订阅同一个主题，任一设备执行动作后广播全量状态（retain 保留），
+   对端 1 秒内收到并刷新；断线自动重连，心跳兜底保证丢消息自愈。
+   Broker 无需注册与配置，国内网络可直连；不可用时用 localStorage 缓存兜底单机演示。 */
 (function(){
   'use strict';
-  var CHANNEL  = 'dca-demo-7qkx29';
-  var WS_URL   = 'wss://demo.piesocket.com/v3/' + CHANNEL +
-                 '?api_key=oCdCMcMPQpbvNjDLFKtu2LRX0r3HDhms7j1aU7w2&notify_self=0';
+  var BROKER   = 'wss://broker.emqx.io:8084/mqtt';
+  var TOPIC    = 'dca/demo/7qkx29';
+  var MQTT_SRC = ['https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js',
+                  'https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js'];
   var CACHE_KEY = 'dca_cache_v7';
   var APP_VER   = '5.0';
-  var HEARTBEAT_MS = 5000;
+  var HEARTBEAT_MS = 10000;
 
   /* ---------- 工具 ---------- */
   function hm(offsetMin){
@@ -69,11 +70,13 @@
 
   var state = cacheLoad() || makeSeed();
 
-  /* ---------- WebSocket 实时同步 ---------- */
-  var ws = null, connected = false, everSynced = false;
-  var reconnectDelay = 1000, reconnectTimer = null, heartbeatTimer = null;
+  /* ---------- MQTT 实时同步 ---------- */
+  var client = null, connected = false, everSynced = false;
+  var heartbeatTimer = null, seedTimer = null;
+  var SID = 'd' + Math.random().toString(36).slice(2, 10);
   var readyResolve, readyResolved = false;
   var ready = new Promise(function(res){ readyResolve = res; });
+  function readyNow(){ if(!readyResolved){ readyResolved = true; readyResolve(); } }
 
   function online(){ return connected; }
   window.__DCA_online = online;
@@ -91,88 +94,88 @@
     everSynced = true;
     cacheSave(state);
     notifyUI();
-    if(first && !readyResolved){ readyResolved = true; readyResolve(); }
+    if(first) readyNow();
     return true;
   }
 
-  function send(obj){
-    if(ws && ws.readyState === 1){
-      try{ ws.send(JSON.stringify(obj)); return true; }catch(e){}
-    }
-    return false;
+  function publish(obj, retain){
+    if(!client || !client.connected) return false;
+    obj.sid = SID;
+    try{
+      client.publish(TOPIC, JSON.stringify(obj), {qos:0, retain:!!retain});
+      return true;
+    }catch(e){ return false; }
   }
-  function broadcast(){
-    send({k:'state', rev:Number(state.rev||0), state:state});
-  }
+  /* 状态变化后广播（retain 保留，后加入的设备订阅即可拿到最新状态） */
+  function broadcast(){ publish({k:'state', rev:Number(state.rev||0), state:state}, true); }
 
   function connect(){
-    var wsForThis = null;
-    try{
-      wsForThis = new WebSocket(WS_URL);
-    }catch(e){
-      scheduleReconnect();
-      return;
-    }
-    ws = wsForThis;
+    var c = window.mqtt.connect(BROKER, {
+      clientId:'dca_' + SID, clean:true, keepalive:30,
+      reconnectPeriod:2000, connectTimeout:8000
+    });
+    client = c;
 
-    wsForThis.onopen = function(){
-      if(ws !== wsForThis) return;
-      connected = true; reconnectDelay = 1000;
-      /* 上线：向频道内其他设备索要当前全量状态 */
-      send({k:'hello'});
+    c.on('connect', function(){
+      if(client !== c) return;
+      connected = true;
+      c.subscribe(TOPIC, {qos:0});
+      /* 上线：向主题内其他设备索要当前全量状态；broker 同时会推送 retain 的最近状态 */
+      publish({k:'hello'}, false);
+      if(seedTimer) clearTimeout(seedTimer);
+      seedTimer = setTimeout(function(){
+        if(client !== c || everSynced) return;
+        /* 1.8 秒内没拿到任何对端状态：以本地为准（首次即播种） */
+        everSynced = true; cacheSave(state); broadcast(); readyNow();
+      }, 1800);
       if(heartbeatTimer) clearInterval(heartbeatTimer);
-      heartbeatTimer = setInterval(broadcast, HEARTBEAT_MS);
-      /* 2 秒内没有任何对端回发状态：以本地为准（首次即播种），放行页面 */
-      setTimeout(function(){
-        if(!everSynced){
-          everSynced = true;
-          cacheSave(state);
-          broadcast();
-          if(!readyResolved){ readyResolved = true; readyResolve(); }
-        }
-      }, 2000);
-    };
+      /* 心跳兜底：即使 retain 丢失也能在 10 秒内自愈（不覆盖 retain） */
+      heartbeatTimer = setInterval(function(){
+        publish({k:'state', rev:Number(state.rev||0), state:state}, false);
+      }, HEARTBEAT_MS);
+    });
 
-    wsForThis.onmessage = function(ev){
-      if(ws !== wsForThis) return;
+    c.on('message', function(topic, payload){
+      if(client !== c) return;
       var msg;
-      try{ msg = JSON.parse(ev.data); }catch(e){ return; }
+      try{ msg = JSON.parse(payload.toString()); }catch(e){ return; }
+      if(msg.sid === SID) return;            /* 忽略自己发回的消息 */
       if(msg.k === 'hello'){
-        /* 新设备上线：把我手里的最新状态发给它 */
-        broadcast();
+        broadcast();                         /* 新设备上线：把我手里的最新状态发给它 */
       }else if(msg.k === 'state'){
         applyRemote(msg.state);
       }
-    };
+    });
 
     function down(){
-      if(ws !== wsForThis) return;
+      if(client !== c) return;
       connected = false;
       if(heartbeatTimer){ clearInterval(heartbeatTimer); heartbeatTimer = null; }
-      scheduleReconnect();
     }
-    wsForThis.onclose = down;
-    wsForThis.onerror = function(){ try{ wsForThis.close(); }catch(e){} };
+    c.on('close', down);
+    c.on('offline', down);
+    c.on('error', function(){});
   }
 
-  function scheduleReconnect(){
-    if(reconnectTimer) return;
-    reconnectTimer = setTimeout(function(){
-      reconnectTimer = null;
-      reconnectDelay = Math.min(reconnectDelay * 2, 10000);
-      connect();
-    }, reconnectDelay);
+  /* 按需加载 MQTT 组件（两个 CDN 兜底），加载成功即接入公共 Broker */
+  function ensureMqtt(){
+    if(window.mqtt && typeof window.mqtt.connect === 'function'){ connect(); return; }
+    var i = 0;
+    (function load(){
+      if(i >= MQTT_SRC.length){ everSynced = true; cacheSave(state); return; }
+      var s = document.createElement('script');
+      s.src = MQTT_SRC[i++];
+      s.onload = function(){
+        if(window.mqtt && typeof window.mqtt.connect === 'function') connect();
+        else load();
+      };
+      s.onerror = load;
+      document.head.appendChild(s);
+    })();
   }
-
-  if('WebSocket' in window){
-    connect();
-  }else{
-    readyResolved = true; readyResolve();
-  }
-  /* 兜底：无论如何 3 秒后放行页面（WS 完全不可用时单机演示） */
-  setTimeout(function(){
-    if(!readyResolved){ readyResolved = true; readyResolve(); }
-  }, 3000);
+  ensureMqtt();
+  /* 兜底：无论如何 3 秒后放行页面（MQTT 组件缺失或连不上时单机演示） */
+  setTimeout(readyNow, 3000);
 
   /* ---------- 业务动作 ---------- */
   function bump(){ state.rev = (Number(state.rev)||0) + 1; cacheSave(state); }

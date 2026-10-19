@@ -281,12 +281,13 @@
 
       <!-- ① 绑定页 -->
       <section class="page active" id="pg-bind">
-        <div class="topbar"><span class="bandtag" id="bindBandTag">手表 A024</span><span class="tb-right" id="bindStat">待绑定</span></div>
+        <div class="topbar"><span class="bandtag" id="bindBandTag">手表 A024</span><span class="tb-right" id="bindStat">待绑定 · <span id="autoCount">15</span>s 后自动演示</span></div>
         <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;text-align:center;">
           <div class="qr-box" id="qrBox"><div class="tape"></div><canvas id="qrCanvas" width="600" height="600"></canvas></div>
           <div class="bid" id="bindBandId">A024</div>
           <div class="sub">请护士扫描上方二维码<br>绑定您的就诊信息</div>
           <div class="waitpulse"><i></i><i></i><i></i></div>
+          <button class="btn btn-g" style="min-height:40px;font-size:0.85rem;width:auto;padding:0 18px;" onclick="switchBand()">🔄 换一个编号</button>
         </div>
         <div style="display:flex;flex-direction:column;gap:6px;align-items:center;flex:0 0 auto;">
           <div class="sub" style="text-align:center;font-size:0.72rem;">绑定后手表会显示您的就诊信息<br>长时间无法绑定，请按右侧按键呼叫护士</div>
@@ -449,6 +450,7 @@
         </div>
         <div class="setblock">
           <div class="srow"><span>🩺 分诊台护士端</span><span class="v" id="openNurseBtn" onclick="openNurse()" style="color:#1F6FE0;font-weight:900;">打开 →</span></div>
+          <div class="srow"><span>🔄 重置演示</span><span class="v" onclick="resetDemo()" style="color:#F4574C;font-weight:900;">重新开始</span></div>
         </div>
         <div style="flex:1;"></div>
       </section>
@@ -463,7 +465,7 @@
 /* ================= 基础 ================= */
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const qs=new URLSearchParams(location.search);
-let BAND_ID=(qs.get('band')||'A024').toUpperCase();
+let BAND_ID=(qs.get('band')||'A'+String(Math.floor(Math.random()*99)+1).padStart(3,'0')).toUpperCase();
 
 let band={bound:false,data:null,exam:null,examStep:0,med:null,callData:null};
 let flowCur=1,curPage='bind';
@@ -598,20 +600,56 @@ function drawQR(canvas,text){
 }
 
 /* ================= 绑定页 ================= */
+let autoDemoTimer=null;
 function renderBind(){
   $('#bindBandId').textContent=BAND_ID;
   $('#bindBandTag').textContent='手表 '+BAND_ID;
   $('#bindStat').textContent='待绑定';
   try{drawQR($('#qrCanvas'),'WB:'+BAND_ID);}
   catch(e){try{drawQR($('#qrCanvas'),BAND_ID);}catch(e2){}}
+  /* 自动演示倒计时 15 秒 */
+  clearInterval(autoDemoTimer);
+  let left=15;
+  $('#autoCount').textContent=left;
+  autoDemoTimer=setInterval(()=>{
+    if(band.bound){clearInterval(autoDemoTimer);return;}
+    left--;
+    if($('#autoCount'))$('#autoCount').textContent=Math.max(0,left);
+    if(left<=0){clearInterval(autoDemoTimer);autoDemo();}
+  },1000);
+}
+async function autoDemo(){
+  /* 从 proxy 里挑一个未绑定的患者，自动 bind */
+  try{
+    const r=await fetch('/api/nurse',{cache:'no-store'});
+    if(!r.ok)return;
+    const d=await r.json();
+    const free=(d.patients||[]).filter(p=>!p.bandActive);
+    if(!free.length)return;
+    const pick=free[Math.floor(Math.random()*free.length)];
+    const r2=await post({type:'bind',band:BAND_ID,patientId:pick.id});
+    console.log('[手表自动演示] 绑定 '+BAND_ID+' → '+pick.name, r2);
+  }catch(e){console.warn('autoDemo fail',e);}
 }
 function switchBand(){
-  const v=prompt('设备维护：请输入手表编号（仅护士操作）',BAND_ID);
+  let v;
+  if(arguments[0]){v=arguments[0];}
+  else{v=prompt('设备维护：请输入手表编号（仅护士操作）',BAND_ID);}
   if(!v)return;
   BAND_ID=v.toUpperCase().replace(/^手环\s*/,'');
   const u=new URL(location);u.searchParams.set('band',BAND_ID);history.replaceState(null,'',u);
   renderBind();renderSet();
   showToast('手表编号已更新为 '+BAND_ID);
+}
+async function resetDemo(){
+  /* 重置整个演示状态 + 随机新编号 + 回绑定页 */
+  if(window.__DCA_reset){window.__DCA_reset();}
+  BAND_ID='A'+String(Math.floor(Math.random()*99)+1).padStart(3,'0');
+  const u=new URL(location);u.searchParams.set('band',BAND_ID);history.replaceState(null,'',u);
+  band={bound:false,data:null,exam:null,examStep:0,med:null,callData:null};
+  flowCur=1;curPage='bind';
+  go('bind');renderBind();renderSet();
+  showToast('已重置，新编号 '+BAND_ID);
 }
 /* 绑定页维护入口：长按二维码 1.2 秒（避免患者误触） */
 (function(){
